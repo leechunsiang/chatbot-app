@@ -116,6 +116,20 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
+DROP POLICY IF EXISTS "Users can view their own conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can create their own conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can update their own conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can delete their own conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can view messages in their conversations" ON public.messages;
+DROP POLICY IF EXISTS "Users can create messages in their conversations" ON public.messages;
+DROP POLICY IF EXISTS "Users can update messages in their conversations" ON public.messages;
+DROP POLICY IF EXISTS "Users can delete messages in their conversations" ON public.messages;
+
+-- Create policies
 CREATE POLICY "Users can view their own profile"
     ON public.users FOR SELECT
     TO authenticated
@@ -216,6 +230,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS set_updated_at_users ON public.users;
+DROP TRIGGER IF EXISTS set_updated_at_conversations ON public.conversations;
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Create triggers
 CREATE TRIGGER set_updated_at_users
     BEFORE UPDATE ON public.users
     FOR EACH ROW
@@ -285,6 +305,16 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('attachments', 'attachments', false)
 ON CONFLICT (id) DO NOTHING;
 
+-- Drop existing storage policies if they exist
+DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload their own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can view their own attachments" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload their own attachments" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own attachments" ON storage.objects;
+
+-- Create storage policies
 CREATE POLICY "Avatar images are publicly accessible"
     ON storage.objects FOR SELECT
     USING (bucket_id = 'avatars');

@@ -63,23 +63,23 @@ export function Auth({ onAuthSuccess }: AuthProps) {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-background">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <Bot className="w-12 h-12 text-primary" />
+    <div className="flex items-center justify-center min-h-screen p-4 bg-[hsl(var(--background))]">
+      <Card className="w-full max-w-md shadow-2xl border-border/50">
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center mb-2">
+            <Bot className="w-16 h-16 text-primary" />
           </div>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-3xl font-bold tracking-tight">
             {isSignUp ? 'Create Account' : 'Welcome Back'}
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-base">
             {isSignUp 
               ? 'Sign up to save your chat history' 
               : 'Sign in to access your conversations'}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-5">
             <div className="space-y-2">
               <Input
                 type="email"
@@ -88,6 +88,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-12 text-base"
               />
             </div>
             <div className="space-y-2">
@@ -99,14 +100,15 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 required
                 disabled={isLoading}
                 minLength={6}
+                className="h-12 text-base"
               />
             </div>
 
             {message && (
-              <div className={`p-3 rounded-md text-sm ${
+              <div className={`p-4 rounded-xl text-sm font-medium ${
                 message.type === 'error' 
-                  ? 'bg-destructive/10 text-destructive' 
-                  : 'bg-green-500/10 text-green-600'
+                  ? 'bg-destructive/10 text-destructive border border-destructive/20' 
+                  : 'bg-green-500/10 text-green-400 border border-green-500/20'
               }`}>
                 {message.text}
               </div>
@@ -114,7 +116,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
             <Button 
               type="submit" 
-              className="w-full"
+              className="w-full h-12 text-base font-semibold"
               disabled={isLoading}
             >
               {isLoading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
@@ -123,21 +125,21 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="w-full h-12 text-base font-semibold"
               onClick={handleGuestMode}
               disabled={isLoading}
             >
               Continue as Guest
             </Button>
 
-            <div className="text-center text-sm">
+            <div className="text-center text-sm pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setMessage(null);
                 }}
-                className="text-primary hover:underline"
+                className="text-primary hover:underline font-medium"
                 disabled={isLoading}
               >
                 {isSignUp 

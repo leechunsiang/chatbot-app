@@ -2,10 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut, Trash2, LayoutDashboard } from 'lucide-react';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
-import { createConversation, createMessage, getConversationMessages, generateConversationTitle } from '@/lib/database';
+import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
+import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
+import { motion } from 'motion/react';
+import { cn } from '@/lib/utils';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -13,14 +16,26 @@ interface Message {
   id?: string;
 }
 
-export function Chat() {
+interface Conversation {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+interface ChatProps {
+  onNavigateToDashboard?: () => void;
+}
+
+export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [open, setOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +49,7 @@ export function Chat() {
   useEffect(() => {
     const initializeChat = async () => {
       try {
+        console.log('💬 Initializing chat...');
         setError(null);
         setIsInitializing(true);
 
@@ -47,38 +63,122 @@ export function Chat() {
           throw new Error('No authenticated user found');
         }
 
+        console.log('✅ Chat session loaded for user:', session.user.id);
         setUserId(session.user.id);
 
-        await ensureUserExists(session.user.id, session.user.email || '');
-
-        const { data: conversations, error: conversationError } = await supabase
-          .from('conversations')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-
-        if (conversationError) {
-          throw new Error(`Failed to load conversations: ${conversationError.message}`);
+        // Try to ensure user exists, but don't fail if table doesn't exist
+        try {
+          await ensureUserExists(session.user.id, session.user.email || '');
+          console.log('✅ User exists in database');
+        } catch (userErr) {
+          console.warn('⚠️ Could not ensure user exists (table may not exist):', userErr);
+          // Continue anyway - user can still chat
         }
 
-        if (conversations && conversations.length > 0) {
-          setConversationId(conversations[0].id);
-          await loadMessages(conversations[0].id);
-        } else {
-          const newConversation = await createConversation(session.user.id, 'New Chat');
-          setConversationId(newConversation.id);
+        // Try to load conversations, but don't fail if table doesn't exist
+        try {
+          await loadConversations(session.user.id);
+
+          const { data: conversations, error: conversationError } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+
+          if (conversationError) {
+            console.warn('⚠️ Could not load conversations:', conversationError.message);
+          } else if (conversations && conversations.length > 0) {
+            setConversationId(conversations[0].id);
+            await loadMessages(conversations[0].id);
+            console.log('✅ Loaded existing conversation');
+          } else {
+            const newConversation = await createConversation(session.user.id, 'New Chat');
+            setConversationId(newConversation.id);
+            await loadConversations(session.user.id);
+            console.log('✅ Created new conversation');
+          }
+        } catch (convErr) {
+          console.warn('⚠️ Could not initialize conversations (table may not exist):', convErr);
+          // Set error but allow chat to load anyway
+          setError('Database not fully configured. Some features may be limited. Run migrations from SUPABASE_SETUP.md');
         }
       } catch (err) {
-        console.error('Initialization error:', err);
+        console.error('❌ Chat initialization error:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize chat');
       } finally {
+        console.log('✅ Chat initialization complete');
         setIsInitializing(false);
       }
     };
 
-    initializeChat();
+    // Add safety timeout
+    const timeout = setTimeout(() => {
+      console.warn('⚠️ Chat initialization timeout - forcing chat to load');
+      setIsInitializing(false);
+      setError('Chat initialization took too long. Some features may not work correctly.');
+    }, 5000);
+
+    initializeChat().finally(() => {
+      clearTimeout(timeout);
+    });
   }, []);
+
+  const loadConversations = async (uid: string) => {
+    try {
+      const convos = await getUserConversations(uid);
+      setConversations(convos);
+    } catch (err) {
+      console.error('Error loading conversations:', err);
+    }
+  };
+
+  const handleNewChat = async () => {
+    if (!userId) return;
+    
+    try {
+      const newConversation = await createConversation(userId, 'New Chat');
+      setConversationId(newConversation.id);
+      setMessages([]);
+      await loadConversations(userId);
+    } catch (err) {
+      console.error('Error creating new chat:', err);
+      setError('Failed to create new chat');
+    }
+  };
+
+  const handleSelectConversation = async (convId: string) => {
+    setConversationId(convId);
+    await loadMessages(convId);
+  };
+
+  const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!userId) return;
+    
+    try {
+      await deleteConversation(convId);
+      await loadConversations(userId);
+      
+      if (convId === conversationId) {
+        const remaining = conversations.filter(c => c.id !== convId);
+        if (remaining.length > 0) {
+          await handleSelectConversation(remaining[0].id);
+        } else {
+          await handleNewChat();
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      setError('Failed to delete conversation');
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
+  };
 
   const ensureUserExists = async (uid: string, email: string) => {
     try {
@@ -150,6 +250,10 @@ export function Chat() {
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', conversationId);
+      
+      if (userId) {
+        await loadConversations(userId);
+      }
     } catch (err) {
       console.error('Error updating conversation timestamp:', err);
     }
@@ -164,6 +268,10 @@ export function Chat() {
         .from('conversations')
         .update({ title })
         .eq('id', conversationId);
+      
+      if (userId) {
+        await loadConversations(userId);
+      }
     } catch (err) {
       console.error('Error updating conversation title:', err);
     }
@@ -276,7 +384,7 @@ export function Chat() {
 
   if (isInitializing) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-screen w-full">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
           <p className="mt-4 text-muted-foreground">Initializing chat...</p>
@@ -286,116 +394,249 @@ export function Chat() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-full max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Error Banner */}
-      {error && (
-        <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm text-destructive font-medium">Error</p>
-            <p className="text-sm text-destructive/80">{error}</p>
-          </div>
-          <button
-            onClick={() => setError(null)}
-            className="text-destructive hover:text-destructive/80"
-          >
-            ×
-          </button>
-        </div>
-      )}
+    <div className="flex h-screen w-full overflow-hidden bg-[hsl(var(--background))]">
+      <Sidebar open={open} setOpen={setOpen}>
+        <SidebarBody className="justify-between gap-6 bg-[hsl(var(--sidebar-bg))]">
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Logo/Title */}
+            <div className="flex items-center gap-3 mb-6 pt-2">
+              <Bot className="w-7 h-7 text-primary flex-shrink-0" />
+              <motion.span
+                animate={{
+                  display: open ? "inline-block" : "none",
+                  opacity: open ? 1 : 0,
+                }}
+                className="text-xl font-semibold tracking-tight whitespace-nowrap"
+              >
+                ChatGPT Clone
+              </motion.span>
+            </div>
 
-      {/* Header */}
-      <div className="flex items-center justify-center mb-4 sm:mb-6">
-        <Bot className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-primary" />
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">ChatGPT Clone</h1>
-      </div>
+            {/* New Chat Button */}
+            <Button
+              onClick={handleNewChat}
+              className="w-full mb-6 justify-start gap-3 h-11 font-medium hover:bg-accent/80"
+              variant="default"
+            >
+              <MessageSquarePlus className="w-5 h-5 flex-shrink-0" />
+              <motion.span
+                animate={{
+                  display: open ? "inline-block" : "none",
+                  opacity: open ? 1 : 0,
+                }}
+                className="whitespace-nowrap"
+              >
+                New Chat
+              </motion.span>
+            </Button>
 
-      {/* Messages Area */}
-      <div className="flex-1 border rounded-lg bg-card overflow-hidden">
-        <ScrollArea className="h-full" ref={scrollAreaRef}>
-          <div className="p-4 sm:p-6 space-y-4">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12 sm:py-20">
-                <Bot className="w-12 h-12 sm:w-16 sm:h-16 mb-4" />
-                <p className="text-base sm:text-lg text-center px-4">
-                  Start a conversation with GPT-4.1-nano
-                </p>
-              </div>
-            ) : (
-              messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex gap-3 sm:gap-4 ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  {message.role === 'assistant' && (
-                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary flex items-center justify-center">
-                      <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
+            {/* Conversations List */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <motion.div
+                animate={{
+                  display: open ? "block" : "none",
+                  opacity: open ? 1 : 0,
+                }}
+                className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+              >
+                Recent Conversations
+              </motion.div>
+              <ScrollArea className="flex-1">
+                <div className="space-y-1 pr-2">
+                  {conversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      onClick={() => handleSelectConversation(conversation.id)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
+                        conversationId === conversation.id 
+                          ? "bg-accent/80 shadow-sm" 
+                          : "hover:bg-accent/40"
+                      )}
+                    >
+                      <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-70" />
+                      <motion.div
+                        animate={{
+                          display: open ? "flex" : "none",
+                          opacity: open ? 1 : 0,
+                        }}
+                        className="flex-1 min-w-0 flex items-center justify-between gap-2"
+                      >
+                        <span className="text-sm font-medium truncate leading-relaxed">
+                          {conversation.title}
+                        </span>
+                        <button
+                          onClick={(e) => handleDeleteConversation(conversation.id, e)}
+                          className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity flex-shrink-0 p-1 hover:bg-destructive/10 rounded"
+                          title="Delete conversation"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </motion.div>
                     </div>
-                  )}
-                  <div
-                    className={`rounded-lg px-4 py-2 sm:px-6 sm:py-3 max-w-[85%] sm:max-w-[80%] ${
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
-                    }`}
-                  >
-                    <p className="text-sm sm:text-base whitespace-pre-wrap break-words">
-                      {message.content}
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+
+          {/* Dashboard Button (only for HR admins) */}
+          {onNavigateToDashboard && (
+            <Button
+              onClick={onNavigateToDashboard}
+              className="w-full justify-start gap-3 h-11 font-medium mb-2"
+              variant="outline"
+            >
+              <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
+              <motion.span
+                animate={{
+                  display: open ? "inline-block" : "none",
+                  opacity: open ? 1 : 0,
+                }}
+                className="whitespace-nowrap"
+              >
+                HR Dashboard
+              </motion.span>
+            </Button>
+          )}
+
+          {/* Sign Out Button */}
+          <Button
+            onClick={handleSignOut}
+            className="w-full justify-start gap-3 h-11 font-medium"
+            variant="outline"
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            <motion.span
+              animate={{
+                display: open ? "inline-block" : "none",
+                opacity: open ? 1 : 0,
+              }}
+              className="whitespace-nowrap"
+            >
+              Sign Out
+            </motion.span>
+          </Button>
+        </SidebarBody>
+      </Sidebar>
+
+      {/* Main Chat Area */}
+      <div className="flex flex-col h-screen flex-1 overflow-hidden bg-[hsl(var(--chat-bg))]">
+        <div className="flex flex-col h-full max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3 backdrop-blur-sm">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-destructive font-semibold">Error</p>
+                <p className="text-sm text-destructive/80 leading-relaxed">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-destructive hover:text-destructive/80 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Header */}
+          <div className="flex items-center justify-center mb-6 sm:mb-8">
+            <Bot className="w-8 h-8 sm:w-10 sm:h-10 mr-3 text-primary" />
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">ChatGPT Clone</h1>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 border border-border/50 rounded-2xl bg-card/30 backdrop-blur-sm overflow-hidden shadow-lg">
+            <ScrollArea className="h-full" ref={scrollAreaRef}>
+              <div className="p-6 sm:p-8 space-y-6">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 sm:py-32">
+                    <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
+                    <p className="text-lg sm:text-xl text-center px-4 font-medium leading-relaxed">
+                      Start a conversation with GPT-4.1-nano
+                    </p>
+                    <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
+                      Type a message below to begin
                     </p>
                   </div>
-                  {message.role === 'user' && (
-                    <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-secondary flex items-center justify-center">
-                      <User className="w-4 h-4 sm:w-5 sm:h-5 text-secondary-foreground" />
+                ) : (
+                  messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex gap-4 sm:gap-5 ${
+                        message.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/90 flex items-center justify-center shadow-md">
+                          <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+                        </div>
+                      )}
+                      <div
+                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] shadow-sm ${
+                          message.role === 'user'
+                            ? 'bg-[hsl(var(--message-user))] text-white'
+                            : 'bg-[hsl(var(--message-assistant))] text-foreground'
+                        }`}
+                      >
+                        <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                          {message.content}
+                        </p>
+                      </div>
+                      {message.role === 'user' && (
+                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-secondary/90 flex items-center justify-center shadow-md">
+                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-secondary-foreground" />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))
-            )}
-            {isLoading && (
-              <div className="flex gap-3 sm:gap-4 justify-start">
-                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary flex items-center justify-center">
-                  <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-primary-foreground" />
-                </div>
-                <div className="rounded-lg px-4 py-2 sm:px-6 sm:py-3 bg-muted">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  ))
+                )}
+                {isLoading && (
+                  <div className="flex gap-4 sm:gap-5 justify-start">
+                    <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/90 flex items-center justify-center shadow-md">
+                      <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+                    </div>
+                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-[hsl(var(--message-assistant))] shadow-sm">
+                      <div className="flex gap-1.5">
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+                <div ref={messagesEndRef} />
               </div>
-            )}
-            <div ref={messagesEndRef} />
+            </ScrollArea>
           </div>
-        </ScrollArea>
-      </div>
 
-      {/* Input Area */}
-      <form onSubmit={sendMessage} className="mt-4 sm:mt-6">
-        <div className="flex gap-2 sm:gap-3">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            disabled={isLoading}
-            className="flex-1 text-sm sm:text-base"
-          />
-          <Button 
-            type="submit" 
-            disabled={isLoading || !input.trim()}
-            size="icon"
-            className="h-10 w-10 sm:h-11 sm:w-11"
-          >
-            <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
+          {/* Input Area */}
+          <form onSubmit={sendMessage} className="mt-6 sm:mt-8">
+            <div className="flex gap-3 sm:gap-4">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Type your message..."
+                disabled={isLoading}
+                className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-card/50 backdrop-blur-sm focus:bg-card transition-colors"
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoading || !input.trim()}
+                size="icon"
+                className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+              >
+                <Send className="w-5 h-5 sm:w-6 sm:h-6" />
+              </Button>
+            </div>
+          </form>
+
+          {/* Footer */}
+          <div className="mt-6 text-center text-sm text-muted-foreground font-medium">
+            Powered by GPT-4.1-nano via GitHub Models
+          </div>
         </div>
-      </form>
-
-      {/* Footer */}
-      <div className="mt-4 text-center text-xs sm:text-sm text-muted-foreground">
-        Powered by GPT-4.1-nano via GitHub Models
       </div>
     </div>
   );
