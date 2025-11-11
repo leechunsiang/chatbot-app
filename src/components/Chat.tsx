@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, AlertCircle } from 'lucide-react';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
+import { createConversation, createMessage, getConversationMessages, generateConversationTitle } from '@/lib/database';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -18,6 +19,8 @@ export function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -30,76 +33,140 @@ export function Chat() {
   // Check authentication and load conversation
   useEffect(() => {
     const initializeChat = async () => {
-      // Check if user is authenticated
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
+      try {
+        setError(null);
+        setIsInitializing(true);
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw new Error(`Authentication error: ${sessionError.message}`);
+        }
+
+        if (!session?.user) {
+          throw new Error('No authenticated user found');
+        }
+
         setUserId(session.user.id);
-        
-        // Create or get existing conversation
-        const { data: conversations } = await supabase
+
+        await ensureUserExists(session.user.id, session.user.email || '');
+
+        const { data: conversations, error: conversationError } = await supabase
           .from('conversations')
           .select('*')
           .eq('user_id', session.user.id)
           .order('updated_at', { ascending: false })
           .limit(1);
 
+        if (conversationError) {
+          throw new Error(`Failed to load conversations: ${conversationError.message}`);
+        }
+
         if (conversations && conversations.length > 0) {
           setConversationId(conversations[0].id);
-          loadMessages(conversations[0].id);
+          await loadMessages(conversations[0].id);
         } else {
-          // Create new conversation
-          const { data: newConversation } = await supabase
-            .from('conversations')
-            .insert({
-              user_id: session.user.id,
-              title: 'New Chat'
-            })
-            .select()
-            .single();
-
-          if (newConversation) {
-            setConversationId(newConversation.id);
-          }
+          const newConversation = await createConversation(session.user.id, 'New Chat');
+          setConversationId(newConversation.id);
         }
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to initialize chat');
+      } finally {
+        setIsInitializing(false);
       }
     };
 
     initializeChat();
   }, []);
 
-  // Load messages from Supabase
-  const loadMessages = async (convId: string) => {
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true });
+  const ensureUserExists = async (uid: string, email: string) => {
+    try {
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', uid)
+        .maybeSingle();
 
-    if (data) {
-      setMessages(data.map(msg => ({
+      if (checkError) {
+        throw new Error(`Failed to check user: ${checkError.message}`);
+      }
+
+      if (!existingUser) {
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({ id: uid, email });
+
+        if (insertError) {
+          throw new Error(`Failed to create user profile: ${insertError.message}`);
+        }
+      }
+    } catch (err) {
+      console.error('Error ensuring user exists:', err);
+      throw err;
+    }
+  };
+
+  const loadMessages = async (convId: string) => {
+    try {
+      const messages = await getConversationMessages(convId);
+      setMessages(messages.map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
         id: msg.id
       })));
+    } catch (err) {
+      console.error('Error loading messages:', err);
+      setError('Failed to load messages');
     }
   };
 
-  // Save message to Supabase
   const saveMessage = async (role: 'user' | 'assistant', content: string) => {
-    if (!conversationId) return;
+    if (!conversationId) {
+      throw new Error('No active conversation');
+    }
 
-    const { data } = await supabase
-      .from('messages')
-      .insert({
+    try {
+      const message = await createMessage({
         conversation_id: conversationId,
         role,
         content
-      })
-      .select()
-      .single();
+      });
 
-    return data?.id;
+      await updateConversationTimestamp();
+
+      return message.id;
+    } catch (err) {
+      console.error('Error saving message:', err);
+      throw new Error('Failed to save message to database');
+    }
+  };
+
+  const updateConversationTimestamp = async () => {
+    if (!conversationId) return;
+
+    try {
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId);
+    } catch (err) {
+      console.error('Error updating conversation timestamp:', err);
+    }
+  };
+
+  const updateConversationTitleFromFirstMessage = async (firstMessage: string) => {
+    if (!conversationId) return;
+
+    try {
+      const title = generateConversationTitle(firstMessage);
+      await supabase
+        .from('conversations')
+        .update({ title })
+        .eq('id', conversationId);
+    } catch (err) {
+      console.error('Error updating conversation title:', err);
+    }
   };
 
   const scrollToBottom = () => {
@@ -110,22 +177,61 @@ export function Chat() {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const channel = supabase
+      .channel(`conversation:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        (payload) => {
+          const newMessage = payload.new as any;
+          setMessages(prev => {
+            const exists = prev.some(msg => msg.id === newMessage.id);
+            if (exists) return prev;
+            return [...prev, {
+              role: newMessage.role as 'user' | 'assistant',
+              content: newMessage.content,
+              id: newMessage.id
+            }];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId]);
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    if (!input.trim() || isLoading || !conversationId || !userId) return;
+
+    const userMessageContent = input;
+    const userMessage: Message = { role: 'user', content: userMessageContent };
+
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
-
-    // Save user message to Supabase
-    if (userId && conversationId) {
-      await saveMessage('user', input);
-    }
+    setError(null);
 
     try {
+      const isFirstMessage = messages.length === 0;
+
+      await saveMessage('user', userMessageContent);
+
+      if (isFirstMessage) {
+        await updateConversationTitleFromFirstMessage(userMessageContent);
+      }
+
       const response = await openai.chat.completions.create({
         model: 'gpt-4.1-nano',
         messages: [...messages, userMessage].map(msg => ({
@@ -136,31 +242,68 @@ export function Chat() {
         max_tokens: 1000,
       });
 
+      const assistantContent = response.choices[0]?.message?.content || 'Sorry, I could not generate a response.';
       const assistantMessage: Message = {
         role: 'assistant',
-        content: response.choices[0]?.message?.content || 'Sorry, I could not generate a response.'
+        content: assistantContent
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Save assistant message to Supabase
-      if (userId && conversationId) {
-        await saveMessage('assistant', assistantMessage.content);
-      }
+      await saveMessage('assistant', assistantContent);
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
+      console.error('Error in sendMessage:', error);
+
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+
+      let errorContent = 'Sorry, there was an error processing your request.';
+      if (errorMsg.includes('OpenAI') || errorMsg.includes('API key')) {
+        errorContent = 'OpenAI API error. Please check your API key in the .env file.';
+      } else if (errorMsg.includes('database') || errorMsg.includes('save')) {
+        errorContent = 'Database error. Your message may not have been saved.';
+      }
+
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'Sorry, there was an error processing your request. Please make sure your OpenAI API key is set in the .env file.'
+        content: errorContent
       };
       setMessages(prev => [...prev, errorMessage]);
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (isInitializing) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+          <p className="mt-4 text-muted-foreground">Initializing chat...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-full max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-destructive font-medium">Error</p>
+            <p className="text-sm text-destructive/80">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-destructive hover:text-destructive/80"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-center mb-4 sm:mb-6">
         <Bot className="w-6 h-6 sm:w-8 sm:h-8 mr-2 sm:mr-3 text-primary" />
