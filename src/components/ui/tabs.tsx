@@ -244,11 +244,10 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
             opacity = 0.4;
             rotateX = -12;
           } else if (animationState === 'stacked') {
-            // Stacked preview cards - but keep active card at 100% opacity
+            // Stacked preview cards only (active card never reaches this state)
             y = -stackLayer * 25;
             scale = Math.max(0.8, 1 - stackLayer * 0.04);
-            // Active card stays at full opacity when hovering
-            opacity = isActive ? 1 : Math.max(0.5, 1 - stackLayer * 0.15);
+            opacity = Math.max(0.5, 1 - stackLayer * 0.15);
             rotateX = -stackLayer * 4;
           } else {
             // Hidden - not visible
@@ -297,9 +296,9 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
               }}
             >
               <div className={cn(
-                "w-full h-full rounded-3xl shadow-2xl border transition-colors",
-                isActive 
-                  ? 'border-blue-500/50 shadow-blue-500/20' 
+                "w-full h-full rounded-3xl shadow-2xl border transition-colors bg-white dark:bg-gray-900",
+                isActive
+                  ? 'border-blue-500/50 shadow-blue-500/20'
                   : 'border-gray-300 dark:border-gray-600'
               )}>
                 {tab.content}
