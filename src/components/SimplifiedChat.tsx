@@ -47,87 +47,49 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   }, [messages]);
 
   useEffect(() => {
-    // Don't run if we're still waiting for parent to provide userId
     if (!initialUserId) {
       console.log('🔵 SimplifiedChat: Waiting for parent to provide userId...');
       return;
     }
 
-    let mounted = true;
-
-    const initChat = async () => {
-      try {
-        console.log('🔵 SimplifiedChat: Initializing chat...', { initialUserId });
-        console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
-        
-        if (mounted) {
-          setUserId(initialUserId);
-          setIsInitializing(false);
-        }
-
-        // Create conversation - this should work now with proper user setup
-        try {
-          console.log('🔵 SimplifiedChat: Creating conversation...');
-          const newConversation = await createConversation(initialUserId, 'New Chat');
-          console.log('✅ SimplifiedChat: Conversation created successfully:', newConversation.id);
-          if (mounted) {
-            setConversationId(newConversation.id);
-          }
-        } catch (convErr: any) {
-          console.error('❌ SimplifiedChat: Error creating conversation:', {
-            error: convErr,
-            message: convErr?.message,
-            details: convErr?.details,
-            hint: convErr?.hint,
-            code: convErr?.code
-          });
-          
-          // Show error to user
-          if (mounted) {
-            setError('Failed to create conversation. Please check your database connection and permissions.');
-          }
-          throw convErr; // Re-throw to be caught by outer try-catch
-        }
-      } catch (err) {
-        console.error('❌ SimplifiedChat: Error initializing chat:', err);
-        if (mounted) {
-          setError('Failed to initialize chat. Please refresh the page and try again.');
-        }
-      }
-    };
-
-    initChat();
-
-    return () => {
-      mounted = false;
-    };
+    console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
+    setUserId(initialUserId);
+    setIsInitializing(false);
   }, [initialUserId]);
 
-  const saveMessage = async (role: 'user' | 'assistant', content: string) => {
-    // Skip saving if no valid conversation
-    if (!conversationId) {
-      console.log('⚠️ No conversation ID available: Not saving message to database');
-      return;
+  const ensureConversation = async (): Promise<string> => {
+    if (conversationId) {
+      return conversationId;
     }
 
+    if (!userId) {
+      throw new Error('User ID not available');
+    }
+
+    console.log('🔵 Creating conversation on-demand...');
     try {
-      console.log('💾 Saving message to database...', { role, conversationId });
+      const newConversation = await createConversation(userId, 'New Chat');
+      console.log('✅ Conversation created:', newConversation.id);
+      setConversationId(newConversation.id);
+      return newConversation.id;
+    } catch (err: any) {
+      console.error('❌ Error creating conversation:', err);
+      throw new Error('Failed to create conversation');
+    }
+  };
+
+  const saveMessage = async (role: 'user' | 'assistant', content: string, convId: string) => {
+    try {
+      console.log('💾 Saving message to database...', { role, convId });
       await createMessage({
-        conversation_id: conversationId,
+        conversation_id: convId,
         role,
         content
       });
       console.log('✅ Message saved successfully');
     } catch (err: any) {
-      console.error('❌ Error saving message:', {
-        error: err,
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint,
-        code: err?.code
-      });
-      // Don't throw - just log the error and continue
-      console.warn('⚠️ Failed to save message, continuing anyway');
+      console.error('❌ Error saving message:', err);
+      throw err;
     }
   };
 
@@ -211,11 +173,6 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
       return;
     }
 
-    // Ensure we always have some conversation id, even if temporary
-    if (!conversationId) {
-      setConversationId(`temp-conversation-${Date.now()}`);
-    }
-
     const userMessageContent = input;
     const userMessage: Message = { role: 'user', content: userMessageContent };
 
@@ -225,7 +182,8 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
     setError(null);
 
     try {
-      await saveMessage('user', userMessageContent);
+      const convId = await ensureConversation();
+      await saveMessage('user', userMessageContent, convId);
 
       // Search for relevant document chunks
       let context = '';
@@ -270,7 +228,7 @@ ${context}`
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      await saveMessage('assistant', assistantContent);
+      await saveMessage('assistant', assistantContent, convId);
     } catch (error) {
       console.error('Error in sendMessage:', error);
       const errorMessage: Message = {
