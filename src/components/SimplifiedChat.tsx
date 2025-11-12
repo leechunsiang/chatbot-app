@@ -71,10 +71,13 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
       const newConversation = await createConversation(userId, 'New Chat');
       console.log('✅ Conversation created:', newConversation.id);
       setConversationId(newConversation.id);
+      await loadConversations(); // Refresh the conversation list
       return newConversation.id;
     } catch (err: any) {
       console.error('❌ Error creating conversation:', err);
-      throw new Error('Failed to create conversation');
+      const errorMessage = err.message || 'Failed to create conversation';
+      setError(errorMessage);
+      throw new Error(errorMessage);
     }
   };
 

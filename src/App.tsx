@@ -78,9 +78,12 @@ export function App() {
 
           // Ensure user record exists (fallback if trigger didn't fire)
           try {
+            console.log('🔄 Ensuring user record exists...');
             await ensureUserExists(session.user.id, session.user.email || '');
+            console.log('✅ User record confirmed');
           } catch (err) {
-            console.warn('Could not ensure user exists, continuing anyway:', err);
+            console.error('⚠️ Could not ensure user exists:', err);
+            // Continue anyway - the conversation creation will handle this
           }
 
           const role = await fetchUserRole(session.user.id);
@@ -125,12 +128,16 @@ export function App() {
           setUserEmail(session.user.email || '');
 
           try {
+            console.log('🔄 Ensuring user record exists in auth state change...');
             await ensureUserExists(session.user.id, session.user.email || '');
+            console.log('✅ User record confirmed in auth state change');
+
             const role = await fetchUserRole(session.user.id);
             setUserRole(role);
           } catch (err) {
-            console.error('Error in auth state change handler:', err);
+            console.error('⚠️ Error in auth state change handler:', err);
             setUserRole('employee');
+            // Continue - the conversation creation will handle user creation if needed
           }
         }
       }

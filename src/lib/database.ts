@@ -26,32 +26,77 @@ export async function getUserConversations(userId: string) {
  */
 export async function createConversation(userId: string, title: string = 'New Chat') {
   console.log('📝 Creating conversation...', { userId, title });
-  
-  // First, verify the user exists in the public.users table
-  try {
-    const { data: userExists, error: userCheckError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
-    
-    if (userCheckError) {
-      console.error('❌ Error checking user existence:', userCheckError);
-      throw new Error(`Failed to verify user: ${userCheckError.message}`);
-    }
-    
-    if (!userExists) {
-      console.error('❌ User does not exist in public.users table:', userId);
-      throw new Error('User record not found. Please ensure you are logged in properly.');
-    }
-    
-    console.log('✅ User exists in database');
-  } catch (err) {
-    console.error('❌ User verification failed:', err);
-    throw err;
+
+  // Get current auth session to verify authentication
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    console.error('❌ Session error:', sessionError);
+    throw new Error('Authentication session error. Please log in again.');
   }
-  
+
+  if (!session) {
+    console.error('❌ No active session');
+    throw new Error('No active session. Please log in.');
+  }
+
+  console.log('✅ Active session confirmed for user:', session.user.id);
+
+  if (session.user.id !== userId) {
+    console.error('❌ Session user ID mismatch:', { sessionId: session.user.id, requestedId: userId });
+    throw new Error('User ID mismatch. Please refresh the page.');
+  }
+
+  // Verify the user exists in the public.users table
+  console.log('🔍 Verifying user record in database...');
+  const { data: userExists, error: userCheckError } = await supabase
+    .from('users')
+    .select('id, email, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (userCheckError) {
+    console.error('❌ Error checking user existence:', {
+      error: userCheckError,
+      message: userCheckError.message,
+      details: userCheckError.details,
+      hint: userCheckError.hint,
+      code: userCheckError.code
+    });
+    throw new Error(`Failed to verify user: ${userCheckError.message}`);
+  }
+
+  if (!userExists) {
+    console.error('❌ User does not exist in public.users table:', userId);
+    console.log('🔄 Attempting to create user record...');
+
+    // Try to create the user record
+    try {
+      await ensureUserExists(userId, session.user.email || '');
+      console.log('✅ User record created, retrying user check...');
+
+      // Verify the user was created
+      const { data: newUserCheck } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!newUserCheck) {
+        throw new Error('User record creation failed silently');
+      }
+
+      console.log('✅ User record verified after creation');
+    } catch (createError) {
+      console.error('❌ Failed to create user record:', createError);
+      throw new Error('Could not create user record. Please try logging out and back in.');
+    }
+  } else {
+    console.log('✅ User exists in database:', userExists);
+  }
+
   // Now create the conversation
+  console.log('📝 Inserting conversation record...');
   const { data, error } = await supabase
     .from('conversations')
     .insert({ user_id: userId, title })
@@ -64,11 +109,19 @@ export async function createConversation(userId: string, title: string = 'New Ch
       message: error.message,
       details: error.details,
       hint: error.hint,
-      code: error.code
+      code: error.code,
+      userId,
+      title
     });
-    throw error;
+
+    // Provide more helpful error messages
+    if (error.code === '23503') {
+      throw new Error('User record issue (foreign key constraint). Please log out and back in.');
+    }
+
+    throw new Error(`Failed to create conversation: ${error.message}`);
   }
-  
+
   console.log('✅ Conversation created successfully:', data);
   return data as Conversation;
 }
@@ -172,42 +225,75 @@ export async function searchSimilarMessages(
  */
 export async function ensureUserExists(userId: string, email: string) {
   console.log('🔍 Checking if user exists...', { userId, email });
-  
+
   try {
+    // First check if user exists
     const { data: existingUser, error: selectError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, email, role')
       .eq('id', userId)
       .maybeSingle();
 
     if (selectError) {
-      console.error('❌ Error checking user existence:', selectError);
+      console.error('❌ Error checking user existence:', {
+        error: selectError,
+        message: selectError.message,
+        code: selectError.code,
+        details: selectError.details
+      });
       throw selectError;
     }
 
     if (!existingUser) {
       console.log('📝 User not found, creating user record...', { userId, email });
-      const { error } = await supabase
+
+      const { data: insertedUser, error: insertError } = await supabase
         .from('users')
         .insert({
           id: userId,
           email: email,
           role: 'employee'
-        });
+        })
+        .select()
+        .maybeSingle();
 
-      if (error) {
+      if (insertError) {
+        // Check if error is due to duplicate key (user was created by trigger or another process)
+        if (insertError.code === '23505') {
+          console.log('⚠️ User record already exists (created by another process), continuing...');
+          return;
+        }
+
         console.error('❌ Error creating user record:', {
-          error,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
+          error: insertError,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+          code: insertError.code
         });
-        throw error;
+        throw insertError;
       }
-      console.log('✅ User record created successfully');
+
+      console.log('✅ User record created successfully:', insertedUser);
+
+      // Wait a moment for the database to fully commit the transaction
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify the user was actually created
+      const { data: verifyUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!verifyUser) {
+        console.error('❌ User creation verification failed');
+        throw new Error('User record was not found after creation');
+      }
+
+      console.log('✅ User creation verified');
     } else {
-      console.log('✅ User already exists in database');
+      console.log('✅ User already exists in database:', existingUser);
     }
   } catch (err) {
     console.error('❌ Error ensuring user exists:', err);
