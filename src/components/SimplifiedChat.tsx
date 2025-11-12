@@ -54,7 +54,6 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
     }
 
     let mounted = true;
-    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const initChat = async () => {
       try {
@@ -66,32 +65,33 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
           setIsInitializing(false);
         }
 
-        // If creating a conversation hangs due to DB/RLS issues, fall back to a temporary conversation
-        fallbackTimer = setTimeout(() => {
-          if (!mounted) return;
-          console.warn('⏳ SimplifiedChat: Conversation creation taking too long, using temporary conversation');
-          setConversationId((prev) => prev ?? `temp-conversation-${Date.now()}`);
-        }, 3000);
-
+        // Create conversation - this should work now with proper user setup
         try {
           console.log('🔵 SimplifiedChat: Creating conversation...');
           const newConversation = await createConversation(initialUserId, 'New Chat');
-          console.log('✅ SimplifiedChat: Conversation created:', newConversation.id);
+          console.log('✅ SimplifiedChat: Conversation created successfully:', newConversation.id);
           if (mounted) {
             setConversationId(newConversation.id);
           }
-        } catch (convErr) {
-          console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
+        } catch (convErr: any) {
+          console.error('❌ SimplifiedChat: Error creating conversation:', {
+            error: convErr,
+            message: convErr?.message,
+            details: convErr?.details,
+            hint: convErr?.hint,
+            code: convErr?.code
+          });
+          
+          // Show error to user
           if (mounted) {
-            setConversationId(`temp-conversation-${Date.now()}`);
+            setError('Failed to create conversation. Please check your database connection and permissions.');
           }
+          throw convErr; // Re-throw to be caught by outer try-catch
         }
       } catch (err) {
         console.error('❌ SimplifiedChat: Error initializing chat:', err);
         if (mounted) {
-          setUserId(initialUserId);
-          setConversationId(`temp-conversation-${Date.now()}`);
-          setIsInitializing(false);
+          setError('Failed to initialize chat. Please refresh the page and try again.');
         }
       }
     };
@@ -100,25 +100,32 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
 
     return () => {
       mounted = false;
-      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [initialUserId]);
 
   const saveMessage = async (role: 'user' | 'assistant', content: string) => {
     // Skip saving if no valid conversation
-    if (!conversationId || conversationId.startsWith('temp-conversation-')) {
-      console.log('⚠️ Temporary conversation: Not saving message to database');
+    if (!conversationId) {
+      console.log('⚠️ No conversation ID available: Not saving message to database');
       return;
     }
 
     try {
+      console.log('💾 Saving message to database...', { role, conversationId });
       await createMessage({
         conversation_id: conversationId,
         role,
         content
       });
-    } catch (err) {
-      console.error('Error saving message:', err);
+      console.log('✅ Message saved successfully');
+    } catch (err: any) {
+      console.error('❌ Error saving message:', {
+        error: err,
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+        code: err?.code
+      });
       // Don't throw - just log the error and continue
       console.warn('⚠️ Failed to save message, continuing anyway');
     }
