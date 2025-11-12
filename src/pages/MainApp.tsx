@@ -105,32 +105,33 @@ export function MainApp() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('🔄 Auth state changed:', event);
-        
+        console.log('🔄 Auth state changed:', event, { hasSession: !!session });
+
         // Handle sign out explicitly
-        if (event === 'SIGNED_OUT') {
-          console.log('👋 User signed out, clearing state');
+        if (event === 'SIGNED_OUT' || !session) {
+          console.log('👋 User signed out, clearing all state');
           setIsAuthenticated(false);
           setUserId(null);
           setUserEmail('');
           setUserRole('employee');
           return;
         }
-        
-        setIsAuthenticated(!!session);
-        setUserId(session?.user?.id || null);
-        setUserEmail(session?.user?.email || '');
 
-        if (session?.user) {
+        // Handle sign in
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session) {
+          console.log('✅ User authenticated, updating state');
+          setIsAuthenticated(true);
+          setUserId(session.user.id);
+          setUserEmail(session.user.email || '');
+
           try {
             await ensureUserExists(session.user.id, session.user.email || '');
             const role = await fetchUserRole(session.user.id);
             setUserRole(role);
           } catch (err) {
             console.error('Error in auth state change handler:', err);
+            setUserRole('employee');
           }
-        } else {
-          setUserRole('employee');
         }
       }
     );
@@ -265,13 +266,27 @@ export function MainApp() {
           userEmail={userEmail}
           onAuthRequired={async () => {
             console.log('🚪 onAuthRequired called - logging out');
-            // Sign out from Supabase
-            await supabase.auth.signOut({ scope: 'global' });
-            // Clear state immediately (auth listener will also handle this)
-            setIsAuthenticated(false);
-            setUserId(null);
-            setUserEmail('');
-            setUserRole('employee');
+
+            try {
+              // Clear local state first
+              setIsAuthenticated(false);
+              setUserId(null);
+              setUserEmail('');
+              setUserRole('employee');
+
+              // Then sign out from Supabase
+              const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+              if (error) {
+                console.error('❌ Logout error:', error);
+                // Even on error, keep the local state cleared
+              } else {
+                console.log('✅ Successfully logged out');
+              }
+            } catch (err) {
+              console.error('❌ Exception during logout:', err);
+              // Keep local state cleared even if signOut fails
+            }
           }}
         />
       </div>

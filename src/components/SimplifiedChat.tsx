@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Bot, User, AlertCircle, Plus, MessageSquare, Menu, X, Trash2 } from 'lucide-react';
 import OpenAI from 'openai';
-import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getUserConversations, getConversationMessages, deleteConversation } from '@/lib/database';
 import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
 import type { Database } from '@/lib/database.types';
@@ -55,20 +54,19 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
     }
 
     let mounted = true;
-    let timeoutId: NodeJS.Timeout | undefined;
 
     const initChat = async () => {
       try {
         console.log('🔵 SimplifiedChat: Initializing chat...', { initialUserId });
 
         // If we have a real user ID from parent
-        if (initialUserId && initialUserId !== 'guest') {
+        if (initialUserId && initialUserId !== 'guest' && initialUserId !== null) {
           console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
           if (mounted) {
             setUserId(initialUserId);
-            setIsInitializing(false); // Mark as initialized immediately
+            setIsInitializing(false);
           }
-          
+
           try {
             console.log('🔵 SimplifiedChat: Creating conversation...');
             const newConversation = await createConversation(initialUserId, 'New Chat');
@@ -79,11 +77,10 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
           } catch (convErr) {
             console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
             if (mounted) {
-              // Don't fall back to guest - keep user authenticated
               setConversationId(`temp-conversation-${Date.now()}`);
             }
           }
-          return; // Exit early
+          return;
         }
 
         // If parent explicitly set guest or null, enable guest mode
@@ -96,8 +93,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
       } catch (err) {
         console.error('❌ SimplifiedChat: Error initializing chat:', err);
         if (mounted) {
-          // If we had a valid userId, keep it
-          if (initialUserId && initialUserId !== 'guest') {
+          if (initialUserId && initialUserId !== 'guest' && initialUserId !== null) {
             setUserId(initialUserId);
             setConversationId(`temp-conversation-${Date.now()}`);
           } else {
@@ -113,33 +109,17 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
 
     return () => {
       mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
     };
-  }, [initialUserId]); // Re-run when userId is provided by parent
+  }, [initialUserId]);
 
-  // Separate effect for auth state changes
+  // Reset chat when userId changes to null or 'guest' (handled by parent)
   useEffect(() => {
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('🔄 SimplifiedChat: Auth state changed:', event, !!session);
-
-        // Handle SIGNED_OUT event
-        if (event === 'SIGNED_OUT') {
-          console.log('👋 SimplifiedChat: User signed out, switching to guest mode');
-          setUserId('guest');
-          setConversationId('guest-conversation');
-          setMessages([]);
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
+    if (initialUserId === null || initialUserId === 'guest') {
+      console.log('👋 SimplifiedChat: Clearing messages for guest mode');
+      setMessages([]);
+      setConversations([]);
+    }
+  }, [initialUserId]);
 
   const saveMessage = async (role: 'user' | 'assistant', content: string) => {
     // Skip saving for guest mode

@@ -15,21 +15,22 @@ interface UserMenuProps {
 
 export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMenuProps) {
   const handleLogout = async () => {
+    if (!onAuthRequired) {
+      console.error('❌ No onAuthRequired callback provided');
+      return;
+    }
+
     try {
       console.log('🚪 Logging out...');
-      
-      // Trigger the callback first to update UI immediately
-      if (onAuthRequired) {
-        console.log('🔄 Calling onAuthRequired callback');
-        await onAuthRequired();
-      }
-      
+      await onAuthRequired();
       console.log('✅ Logout complete');
     } catch (error) {
       console.error('❌ Exception during logout:', error);
-      // Force UI update even on exception
-      if (onAuthRequired) {
+      // Try again even on exception
+      try {
         await onAuthRequired();
+      } catch (retryError) {
+        console.error('❌ Retry failed:', retryError);
       }
     }
   };
