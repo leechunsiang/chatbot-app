@@ -40,49 +40,54 @@ export function SimplifiedChat() {
 
   useEffect(() => {
     let mounted = true;
-    
+    let timeoutId: NodeJS.Timeout;
+
     const initChat = async () => {
       try {
         console.log('🔵 SimplifiedChat: Initializing chat...');
-        
-        // Wait a bit longer for auth to settle
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        if (!mounted) return;
-        
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('❌ SimplifiedChat: Session error:', sessionError);
-          if (mounted) {
-            setError('Failed to get session');
-            // Enable guest mode on error
+
+        // Set a maximum timeout to guarantee initialization completes
+        timeoutId = setTimeout(() => {
+          if (mounted && isInitializing) {
+            console.warn('⚠️ SimplifiedChat: Initialization timeout - enabling guest mode');
             setUserId('guest');
             setConversationId('guest-conversation');
             setIsInitializing(false);
           }
+        }, 8000);
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        if (sessionError) {
+          console.error('❌ SimplifiedChat: Session error:', sessionError);
+          clearTimeout(timeoutId);
+          setError('Failed to get session');
+          setUserId('guest');
+          setConversationId('guest-conversation');
+          setIsInitializing(false);
           return;
         }
 
         if (session?.user) {
           console.log('✅ SimplifiedChat: User found:', session.user.id);
-          if (!mounted) return;
-          
           setUserId(session.user.id);
-          
+
           // Create a new conversation
           try {
             console.log('🔵 SimplifiedChat: Creating conversation...');
             const newConversation = await createConversation(session.user.id, 'New Chat');
             console.log('✅ SimplifiedChat: Conversation created:', newConversation.id);
             if (mounted) {
+              clearTimeout(timeoutId);
               setConversationId(newConversation.id);
               setIsInitializing(false);
             }
           } catch (convErr) {
             console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
             if (mounted) {
-              // Fall back to guest mode
+              clearTimeout(timeoutId);
               setUserId('guest');
               setConversationId('guest-conversation');
               setIsInitializing(false);
@@ -90,15 +95,15 @@ export function SimplifiedChat() {
           }
         } else {
           console.log('⚠️ SimplifiedChat: No session found, enabling guest mode');
-          if (mounted) {
-            setUserId('guest');
-            setConversationId('guest-conversation');
-            setIsInitializing(false);
-          }
+          clearTimeout(timeoutId);
+          setUserId('guest');
+          setConversationId('guest-conversation');
+          setIsInitializing(false);
         }
       } catch (err) {
         console.error('❌ SimplifiedChat: Error initializing chat:', err);
         if (mounted) {
+          clearTimeout(timeoutId);
           setUserId('guest');
           setConversationId('guest-conversation');
           setIsInitializing(false);
@@ -107,38 +112,26 @@ export function SimplifiedChat() {
     };
 
     initChat();
-    
+
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         console.log('🔄 SimplifiedChat: Auth state changed:', event, !!session);
-        if (event === 'SIGNED_IN' && session?.user && mounted) {
-          console.log('✅ SimplifiedChat: Signed in, reinitializing...');
-          setUserId(session.user.id);
-          try {
-            const newConversation = await createConversation(session.user.id, 'New Chat');
-            if (mounted) {
-              setConversationId(newConversation.id);
-              setIsInitializing(false);
-            }
-          } catch (err) {
-            console.error('❌ Error creating conversation on sign in:', err);
-            if (mounted) {
-              setUserId('guest');
-              setConversationId('guest-conversation');
-              setIsInitializing(false);
-            }
-          }
-        } else if (event === 'SIGNED_OUT' && mounted) {
+
+        // Only handle SIGNED_OUT event - don't re-initialize on SIGNED_IN
+        // The initial load handles the signed-in state
+        if (event === 'SIGNED_OUT' && mounted) {
+          console.log('👋 SimplifiedChat: User signed out, switching to guest mode');
           setUserId('guest');
           setConversationId('guest-conversation');
-          setIsInitializing(false);
+          setMessages([]);
         }
       }
     );
-    
+
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);

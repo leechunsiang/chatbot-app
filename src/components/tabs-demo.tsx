@@ -6,6 +6,7 @@ export default function TabsDemo() {
   const tabs = [
     {
       title: "Product",
+      label: "Product",
       value: "product",
       content: (
         <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
@@ -16,6 +17,7 @@ export default function TabsDemo() {
     },
     {
       title: "Services",
+      label: "Services",
       value: "services",
       content: (
         <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
@@ -26,6 +28,7 @@ export default function TabsDemo() {
     },
     {
       title: "Playground",
+      label: "Playground",
       value: "playground",
       content: (
         <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
@@ -36,6 +39,7 @@ export default function TabsDemo() {
     },
     {
       title: "Content",
+      label: "Content",
       value: "content",
       content: (
         <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
@@ -46,6 +50,7 @@ export default function TabsDemo() {
     },
     {
       title: "Random",
+      label: "Random",
       value: "random",
       content: (
         <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
