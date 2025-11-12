@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut, Trash2, LayoutDashboard } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut, Trash2, LayoutDashboard, MoreVertical, Edit2 } from 'lucide-react';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
@@ -36,8 +36,12 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   // Initialize OpenAI client with direct API key
   const openai = new OpenAI({
@@ -120,6 +124,36 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
     initializeChat();
   }, []);
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const isMenuButton = target.closest('[data-menu-button]');
+      const isMenuContent = target.closest('[data-menu-content]');
+      
+      if (!isMenuButton && !isMenuContent) {
+        setOpenMenuId(null);
+      }
+    };
+
+    // Add listener after a delay
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 100);
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [openMenuId]);
+
+  const toggleMenu = (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setOpenMenuId(prev => prev === conversationId ? null : conversationId);
+  };
+
   const loadConversations = async (uid: string) => {
     try {
       const convos = await getUserConversations(uid);
@@ -169,6 +203,33 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
       console.error('Error deleting conversation:', err);
       setError('Failed to delete conversation');
     }
+  };
+
+  const handleRenameConversation = async (convId: string, newTitle: string) => {
+    if (!userId || !newTitle.trim()) return;
+    
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ title: newTitle.trim() })
+        .eq('id', convId);
+      
+      if (error) throw error;
+      
+      await loadConversations(userId);
+      setEditingId(null);
+      setEditingTitle('');
+    } catch (err) {
+      console.error('Error renaming conversation:', err);
+      setError('Failed to rename conversation');
+    }
+  };
+
+  const startRename = (convId: string, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(convId);
+    setEditingTitle(currentTitle);
+    setOpenMenuId(null);
   };
 
   const handleSignOut = async () => {
@@ -459,32 +520,55 @@ Note: Currently, no policy documents are available. Encourage users to check wit
         <SidebarBody className="justify-between gap-6 bg-[hsl(var(--sidebar-bg))]">
           <div className="flex flex-col flex-1 overflow-hidden">
             {/* Logo/Title */}
-            <div className="flex items-center gap-3 mb-6 pt-2">
-              <Bot className="w-7 h-7 text-primary flex-shrink-0" />
-              <motion.span
+            <div className="flex items-center gap-3 mb-6 pt-12">
+              <motion.div
+                initial={false}
                 animate={{
-                  display: open ? "inline-block" : "none",
                   opacity: open ? 1 : 0,
+                  scale: open ? 1 : 0,
                 }}
-                className="text-xl font-semibold tracking-tight whitespace-nowrap"
+                transition={{
+                  duration: 0.2,
+                  ease: "easeInOut",
+                }}
               >
-                ChatGPT Clone
+                <Bot className="w-7 h-7 text-primary flex-shrink-0" />
+              </motion.div>
+              <motion.span
+                initial={false}
+                animate={{
+                  opacity: open ? 1 : 0,
+                  width: open ? "auto" : 0,
+                }}
+                transition={{
+                  duration: 0.2,
+                  ease: "easeInOut",
+                }}
+                className="text-xl font-semibold tracking-tight whitespace-nowrap overflow-hidden"
+              >
+                Policy & Benefits Chatbot
               </motion.span>
             </div>
 
             {/* New Chat Button */}
             <Button
               onClick={handleNewChat}
-              className="w-full mb-6 justify-start gap-3 h-11 font-medium hover:bg-accent/80"
+              className="w-full mb-6 justify-center gap-3 h-11 font-medium hover:bg-accent/80"
               variant="default"
+              style={{ justifyContent: open ? 'flex-start' : 'center' }}
             >
               <MessageSquarePlus className="w-5 h-5 flex-shrink-0" />
               <motion.span
+                initial={false}
                 animate={{
-                  display: open ? "inline-block" : "none",
                   opacity: open ? 1 : 0,
+                  width: open ? "auto" : 0,
                 }}
-                className="whitespace-nowrap"
+                transition={{
+                  duration: 0.2,
+                  ease: "easeInOut",
+                }}
+                className="whitespace-nowrap overflow-hidden"
               >
                 New Chat
               </motion.span>
@@ -493,48 +577,133 @@ Note: Currently, no policy documents are available. Encourage users to check wit
             {/* Conversations List */}
             <div className="flex-1 overflow-hidden flex flex-col">
               <motion.div
+                initial={false}
                 animate={{
-                  display: open ? "block" : "none",
                   opacity: open ? 1 : 0,
+                  height: open ? "auto" : 0,
                 }}
-                className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                transition={{
+                  duration: 0.2,
+                  ease: "easeInOut",
+                }}
+                className="mb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider overflow-hidden"
               >
                 Recent Conversations
               </motion.div>
               <ScrollArea className="flex-1">
                 <div className="space-y-1 pr-2">
-                  {conversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      className={cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 group",
-                        conversationId === conversation.id 
-                          ? "bg-accent/80 shadow-sm" 
-                          : "hover:bg-accent/40"
-                      )}
-                    >
-                      <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-70" />
-                      <motion.div
-                        animate={{
-                          display: open ? "flex" : "none",
-                          opacity: open ? 1 : 0,
-                        }}
-                        className="flex-1 min-w-0 flex items-center justify-between gap-2"
+                  {conversations.map((conversation) => {
+                    const isOpen = openMenuId === conversation.id;
+                    
+                    return (
+                      <div
+                        key={conversation.id}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
+                          conversationId === conversation.id 
+                            ? "bg-accent/80 shadow-sm" 
+                            : "hover:bg-accent/40"
+                        )}
+                        style={{ justifyContent: open ? 'flex-start' : 'center' }}
                       >
-                        <span className="text-sm font-medium truncate leading-relaxed">
-                          {conversation.title}
-                        </span>
-                        <button
-                          onClick={(e) => handleDeleteConversation(conversation.id, e)}
-                          className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity flex-shrink-0 p-1 hover:bg-destructive/10 rounded"
-                          title="Delete conversation"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </motion.div>
-                    </div>
-                  ))}
+                        <MessageSquare className="w-4 h-4 flex-shrink-0 opacity-70" />
+                        
+                        {editingId === conversation.id && open ? (
+                          <motion.div
+                            initial={false}
+                            animate={{ opacity: 1, width: "auto" }}
+                            className="flex-1 min-w-0 flex items-center gap-2"
+                          >
+                            <Input
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameConversation(conversation.id, editingTitle);
+                                } else if (e.key === 'Escape') {
+                                  setEditingId(null);
+                                  setEditingTitle('');
+                                }
+                              }}
+                              onBlur={() => {
+                                if (editingTitle.trim()) {
+                                  handleRenameConversation(conversation.id, editingTitle);
+                                } else {
+                                  setEditingId(null);
+                                  setEditingTitle('');
+                                }
+                              }}
+                              autoFocus
+                              className="h-7 text-sm"
+                            />
+                          </motion.div>
+                        ) : (
+                          <>
+                            <motion.div
+                              initial={false}
+                              animate={{
+                                opacity: open ? 1 : 0,
+                                width: open ? "auto" : 0,
+                              }}
+                              transition={{
+                                duration: 0.2,
+                                ease: "easeInOut",
+                              }}
+                              className="flex-1 min-w-0 overflow-hidden cursor-pointer flex items-center justify-between gap-2"
+                              onClick={() => handleSelectConversation(conversation.id)}
+                            >
+                              <span className="text-sm font-medium truncate leading-relaxed">
+                                {conversation.title}
+                              </span>
+                              
+                              {open && (
+                                <div className="relative flex-shrink-0">
+                                  <button
+                                    data-menu-button
+                                    onClick={(e) => toggleMenu(conversation.id, e)}
+                                    className="opacity-60 hover:opacity-100 hover:bg-accent/60 transition-all p-1.5 rounded flex items-center justify-center"
+                                    title="More options"
+                                    type="button"
+                                  >
+                                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                                  </button>
+                                
+                                  {isOpen && (
+                                    <div 
+                                      data-menu-content
+                                      ref={(el) => { menuRefs.current[conversation.id] = el; }}
+                                      className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg py-1 z-[100] min-w-[150px]"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        onClick={(e) => startRename(conversation.id, conversation.title, e)}
+                                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent flex items-center gap-2"
+                                        type="button"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                        Rename
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          setOpenMenuId(null);
+                                          handleDeleteConversation(conversation.id, e);
+                                        }}
+                                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent flex items-center gap-2 text-destructive"
+                                        type="button"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </motion.div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -544,16 +713,22 @@ Note: Currently, no policy documents are available. Encourage users to check wit
           {onNavigateToDashboard && (
             <Button
               onClick={onNavigateToDashboard}
-              className="w-full justify-start gap-3 h-11 font-medium mb-2"
+              className="w-full justify-center gap-3 h-11 font-medium mb-2"
               variant="outline"
+              style={{ justifyContent: open ? 'flex-start' : 'center' }}
             >
               <LayoutDashboard className="w-5 h-5 flex-shrink-0" />
               <motion.span
+                initial={false}
                 animate={{
-                  display: open ? "inline-block" : "none",
                   opacity: open ? 1 : 0,
+                  width: open ? "auto" : 0,
                 }}
-                className="whitespace-nowrap"
+                transition={{
+                  duration: 0.2,
+                  ease: "easeInOut",
+                }}
+                className="whitespace-nowrap overflow-hidden"
               >
                 HR Dashboard
               </motion.span>
@@ -563,16 +738,22 @@ Note: Currently, no policy documents are available. Encourage users to check wit
           {/* Sign Out Button */}
           <Button
             onClick={handleSignOut}
-            className="w-full justify-start gap-3 h-11 font-medium"
+            className="w-full justify-center gap-3 h-11 font-medium"
             variant="outline"
+            style={{ justifyContent: open ? 'flex-start' : 'center' }}
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <motion.span
+              initial={false}
               animate={{
-                display: open ? "inline-block" : "none",
                 opacity: open ? 1 : 0,
+                width: open ? "auto" : 0,
               }}
-              className="whitespace-nowrap"
+              transition={{
+                duration: 0.2,
+                ease: "easeInOut",
+              }}
+              className="whitespace-nowrap overflow-hidden"
             >
               Sign Out
             </motion.span>
@@ -603,7 +784,7 @@ Note: Currently, no policy documents are available. Encourage users to check wit
           {/* Header */}
           <div className="flex items-center justify-center mb-6 sm:mb-8">
             <Bot className="w-8 h-8 sm:w-10 sm:h-10 mr-3 text-primary" />
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">ChatGPT Clone</h1>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">Policy & Benefits Chatbot</h1>
           </div>
 
           {/* Messages Area */}

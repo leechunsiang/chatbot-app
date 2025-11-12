@@ -84,21 +84,36 @@ export const DesktopSidebar = ({
   ...props
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
+  const sidebarContent = children as React.ReactNode;
+  
   return (
     <>
       <motion.div
         className={cn(
-          "h-full px-4 py-4 hidden md:flex md:flex-col bg-[hsl(var(--sidebar-bg))] w-[300px] shrink-0 border-r border-border/50",
+          "h-full px-4 py-4 hidden md:flex md:flex-col bg-[hsl(var(--sidebar-bg))] w-[300px] shrink-0 border-r border-border/50 relative",
           className
         )}
         animate={{
           width: animate ? (open ? "300px" : "60px") : "300px",
         }}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        transition={{
+          duration: 0.2,
+          ease: "easeInOut",
+        }}
         {...props}
       >
-        {children}
+        <button
+          onClick={() => setOpen(!open)}
+          className="absolute top-4 right-4 z-50 p-1.5 rounded-md hover:bg-accent/50 transition-colors"
+          aria-label="Toggle sidebar"
+        >
+          {open ? (
+            <IconX className="h-5 w-5 text-foreground" />
+          ) : (
+            <IconMenu2 className="h-5 w-5 text-foreground" />
+          )}
+        </button>
+        {sidebarContent}
       </motion.div>
     </>
   );
