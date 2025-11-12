@@ -48,58 +48,49 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
 
   useEffect(() => {
     // Don't run if we're still waiting for parent to provide userId
-    if (initialUserId === undefined) {
+    if (!initialUserId) {
       console.log('🔵 SimplifiedChat: Waiting for parent to provide userId...');
       return;
     }
 
     let mounted = true;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const initChat = async () => {
       try {
         console.log('🔵 SimplifiedChat: Initializing chat...', { initialUserId });
-
-        // If we have a real user ID from parent
-        if (initialUserId && initialUserId !== 'guest' && initialUserId !== null) {
-          console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
-          if (mounted) {
-            setUserId(initialUserId);
-            setIsInitializing(false);
-          }
-
-          try {
-            console.log('🔵 SimplifiedChat: Creating conversation...');
-            const newConversation = await createConversation(initialUserId, 'New Chat');
-            console.log('✅ SimplifiedChat: Conversation created:', newConversation.id);
-            if (mounted) {
-              setConversationId(newConversation.id);
-            }
-          } catch (convErr) {
-            console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
-            if (mounted) {
-              setConversationId(`temp-conversation-${Date.now()}`);
-            }
-          }
-          return;
+        console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
+        
+        if (mounted) {
+          setUserId(initialUserId);
+          setIsInitializing(false);
         }
 
-        // If parent explicitly set guest or null, enable guest mode
-        console.log('🔵 SimplifiedChat: Enabling guest mode');
-        if (mounted) {
-          setUserId('guest');
-          setConversationId('guest-conversation');
-          setIsInitializing(false);
+        // If creating a conversation hangs due to DB/RLS issues, fall back to a temporary conversation
+        fallbackTimer = setTimeout(() => {
+          if (!mounted) return;
+          console.warn('⏳ SimplifiedChat: Conversation creation taking too long, using temporary conversation');
+          setConversationId((prev) => prev ?? `temp-conversation-${Date.now()}`);
+        }, 3000);
+
+        try {
+          console.log('🔵 SimplifiedChat: Creating conversation...');
+          const newConversation = await createConversation(initialUserId, 'New Chat');
+          console.log('✅ SimplifiedChat: Conversation created:', newConversation.id);
+          if (mounted) {
+            setConversationId(newConversation.id);
+          }
+        } catch (convErr) {
+          console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
+          if (mounted) {
+            setConversationId(`temp-conversation-${Date.now()}`);
+          }
         }
       } catch (err) {
         console.error('❌ SimplifiedChat: Error initializing chat:', err);
         if (mounted) {
-          if (initialUserId && initialUserId !== 'guest' && initialUserId !== null) {
-            setUserId(initialUserId);
-            setConversationId(`temp-conversation-${Date.now()}`);
-          } else {
-            setUserId('guest');
-            setConversationId('guest-conversation');
-          }
+          setUserId(initialUserId);
+          setConversationId(`temp-conversation-${Date.now()}`);
           setIsInitializing(false);
         }
       }
@@ -109,22 +100,14 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
 
     return () => {
       mounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [initialUserId]);
 
-  // Reset chat when userId changes to null or 'guest' (handled by parent)
-  useEffect(() => {
-    if (initialUserId === null || initialUserId === 'guest') {
-      console.log('👋 SimplifiedChat: Clearing messages for guest mode');
-      setMessages([]);
-      setConversations([]);
-    }
-  }, [initialUserId]);
-
   const saveMessage = async (role: 'user' | 'assistant', content: string) => {
-    // Skip saving for guest mode
-    if (!conversationId || conversationId === 'guest-conversation') {
-      console.log('⚠️ Guest mode: Not saving message to database');
+    // Skip saving if no valid conversation
+    if (!conversationId || conversationId.startsWith('temp-conversation-')) {
+      console.log('⚠️ Temporary conversation: Not saving message to database');
       return;
     }
 
@@ -142,7 +125,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   };
 
   const loadConversations = async () => {
-    if (!userId || userId === 'guest') return;
+    if (!userId) return;
     
     try {
       const convs = await getUserConversations(userId);
@@ -168,7 +151,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   };
 
   const handleNewChat = async () => {
-    if (!userId || userId === 'guest') return;
+    if (!userId) return;
     
     try {
       const newConv = await createConversation(userId, 'New Chat');
@@ -189,7 +172,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   };
 
   const handleDeleteConversation = async (convId: string) => {
-    if (!userId || userId === 'guest') return;
+    if (!userId) return;
     
     try {
       await deleteConversation(convId);
@@ -209,7 +192,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
 
   // Load conversations when userId changes
   useEffect(() => {
-    if (userId && userId !== 'guest') {
+    if (userId) {
       loadConversations();
     }
   }, [userId]);
@@ -217,8 +200,13 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!input.trim() || isLoading || !userId || !conversationId) {
+    if (!input.trim() || isLoading || !userId) {
       return;
+    }
+
+    // Ensure we always have some conversation id, even if temporary
+    if (!conversationId) {
+      setConversationId(`temp-conversation-${Date.now()}`);
     }
 
     const userMessageContent = input;
@@ -313,7 +301,7 @@ ${context}`
           <div className="p-4">
             <Button
               onClick={handleNewChat}
-              disabled={!userId || userId === 'guest'}
+              disabled={!userId}
               className="w-full justify-start gap-2"
               variant="outline"
             >
@@ -478,23 +466,26 @@ ${context}`
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={
-                  isInitializing
-                    ? "Initializing..."
-                    : !userId || userId === 'guest'
-                    ? "Type your message... (Guest mode - not saved)"
-                    : !conversationId || conversationId === 'guest-conversation'
-                    ? "Type your message... (Guest mode - not saved)"
-                    : "Type your message..."
-                }
-                disabled={isLoading || isInitializing}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isLoading && input.trim() && userId) {
+                      const form = (e.currentTarget as HTMLInputElement).form;
+                      form?.requestSubmit();
+                    }
+                  }
+                }}
+                placeholder={isInitializing ? "Initializing..." : "Type your message..."}
+                // Enable typing as soon as we have a userId even if conversation still creating
+                disabled={isLoading || (!userId)}
                 className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-900 transition-colors"
               />
               <Button
                 type="submit"
-                disabled={isLoading || !input.trim() || isInitializing}
+                disabled={isLoading || !input.trim() || !userId}
                 size="icon"
                 className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                title={!userId ? 'Waiting for user session' : !input.trim() ? 'Enter a message' : 'Send message'}
               >
                 <Send className="w-5 h-5 sm:w-6 sm:h-6" />
               </Button>
