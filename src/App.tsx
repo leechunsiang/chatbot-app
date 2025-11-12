@@ -17,23 +17,9 @@ function App() {
     const initAuth = async () => {
       try {
         console.log('🔐 Initializing auth...');
-        
-        // Add timeout to getSession call
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise<null>((resolve) => 
-          setTimeout(() => resolve(null), 3000)
-        );
-        
-        const result = await Promise.race([sessionPromise, timeoutPromise]);
-        
-        if (result === null) {
-          console.warn('⚠️ Auth session timed out - allowing app to load anyway');
-          setIsLoading(false);
-          return;
-        }
-        
-        const { data: { session }, error: sessionError } = result;
-        
+
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
         if (sessionError) {
           console.error('❌ Session error:', sessionError);
           setIsLoading(false);
@@ -42,7 +28,7 @@ function App() {
 
         console.log('✅ Session loaded:', !!session);
         setIsAuthenticated(!!session);
-        
+
         // Fetch user role from profile if logged in
         if (session?.user) {
           console.log('👤 Fetching user role for:', session.user.id);
@@ -51,10 +37,10 @@ function App() {
               .from('users')
               .select('role')
               .eq('id', session.user.id)
-              .maybeSingle(); // Use maybeSingle instead of single to handle no rows
-            
+              .maybeSingle();
+
             if (error) {
-              console.log('⚠️ Error fetching user role (table may not exist yet):', error.message);
+              console.log('⚠️ Error fetching user role:', error.message);
               setUserRole('employee');
             } else if (profile?.role) {
               console.log('✅ User role:', profile.role);
@@ -76,22 +62,14 @@ function App() {
       }
     };
 
-    // Add a safety timeout as last resort
-    const timeout = setTimeout(() => {
-      console.warn('⚠️ Auth initialization timeout - forcing app to load');
-      setIsLoading(false);
-    }, 5000); // 5 second timeout
-
-    initAuth().finally(() => {
-      clearTimeout(timeout);
-    });
+    initAuth();
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setIsAuthenticated(!!session);
-      
+
       // Fetch user role when auth state changes
       if (session?.user) {
         try {
@@ -100,7 +78,7 @@ function App() {
             .select('role')
             .eq('id', session.user.id)
             .maybeSingle();
-          
+
           if (!error && profile?.role) {
             setUserRole(profile.role as UserRole);
           } else {

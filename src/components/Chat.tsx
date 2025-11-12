@@ -34,7 +34,6 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [open, setOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -51,32 +50,34 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
       try {
         console.log('💬 Initializing chat...');
         setError(null);
-        setIsInitializing(true);
 
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
-          throw new Error(`Authentication error: ${sessionError.message}`);
+          console.error('❌ Session error:', sessionError);
+          setError('Authentication error. Please try refreshing the page.');
+          return;
         }
 
         if (!session?.user) {
-          throw new Error('No authenticated user found');
+          console.warn('⚠️ No authenticated user found');
+          setError('Not authenticated. Please sign in.');
+          return;
         }
 
         console.log('✅ Chat session loaded for user:', session.user.id);
         setUserId(session.user.id);
-        console.log('📊 State after auth:', { userId: session.user.id });
 
         // Try to ensure user exists, but don't fail if table doesn't exist
         try {
           await ensureUserExists(session.user.id, session.user.email || '');
           console.log('✅ User exists in database');
         } catch (userErr) {
-          console.warn('⚠️ Could not ensure user exists (table may not exist):', userErr);
+          console.warn('⚠️ Could not ensure user exists:', userErr);
           // Continue anyway - user can still chat
         }
 
-        // Try to load conversations, but don't fail if table doesn't exist
+        // Try to load conversations
         try {
           await loadConversations(session.user.id);
 
@@ -88,47 +89,34 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
             .limit(1);
 
           if (conversationError) {
-            console.warn('⚠️ Could not load conversations:', conversationError.message);
-            throw new Error(`Database error: ${conversationError.message}`);
+            console.error('❌ Could not load conversations:', conversationError);
+            // Create a new conversation instead
+            const newConversation = await createConversation(session.user.id, 'New Chat');
+            setConversationId(newConversation.id);
+            await loadConversations(session.user.id);
+            console.log('✅ Created new conversation:', newConversation.id);
           } else if (conversations && conversations.length > 0) {
             setConversationId(conversations[0].id);
             await loadMessages(conversations[0].id);
             console.log('✅ Loaded existing conversation:', conversations[0].id);
-            console.log('📊 State after loading:', { conversationId: conversations[0].id, userId: session.user.id });
           } else {
             const newConversation = await createConversation(session.user.id, 'New Chat');
             setConversationId(newConversation.id);
             await loadConversations(session.user.id);
             console.log('✅ Created new conversation:', newConversation.id);
-            console.log('📊 State after creation:', { conversationId: newConversation.id, userId: session.user.id });
           }
         } catch (convErr) {
-          console.error('❌ Could not initialize conversations (database may not be set up):', convErr);
-          // Set error and don't allow chat without proper setup
+          console.error('❌ Could not initialize conversations:', convErr);
           const errorMessage = convErr instanceof Error ? convErr.message : 'Unknown error';
-          setError(`Database error: ${errorMessage}. Please ensure migrations are run. See SUPABASE_SETUP.md for instructions.`);
-          // Don't proceed - user needs to fix database setup
-          throw convErr;
+          setError(`Database error: ${errorMessage}. Please check console for details.`);
         }
       } catch (err) {
         console.error('❌ Chat initialization error:', err);
         setError(err instanceof Error ? err.message : 'Failed to initialize chat');
-      } finally {
-        console.log('✅ Chat initialization complete');
-        setIsInitializing(false);
       }
     };
 
-    // Add safety timeout
-    const timeout = setTimeout(() => {
-      console.warn('⚠️ Chat initialization timeout - forcing chat to load');
-      setIsInitializing(false);
-      setError('Chat initialization took too long. Some features may not work correctly.');
-    }, 5000);
-
-    initializeChat().finally(() => {
-      clearTimeout(timeout);
-    });
+    initializeChat();
   }, []);
 
   const loadConversations = async (uid: string) => {
@@ -183,8 +171,14 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
+    try {
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Force reload anyway to clear state
+      window.location.reload();
+    }
   };
 
   const ensureUserExists = async (uid: string, email: string) => {
@@ -329,24 +323,20 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
     e.preventDefault();
 
     if (!input.trim()) {
-      console.warn('⚠️ Cannot send: No input text');
       return;
     }
 
     if (isLoading) {
-      console.warn('⚠️ Cannot send: Already loading');
-      return;
-    }
-
-    if (!conversationId) {
-      console.error('❌ Cannot send: No conversation ID');
-      setError('Chat not initialized properly. Please refresh the page or check database setup.');
       return;
     }
 
     if (!userId) {
-      console.error('❌ Cannot send: No user ID');
-      setError('User not authenticated. Please sign in again.');
+      setError('Please wait for authentication to complete.');
+      return;
+    }
+
+    if (!conversationId) {
+      setError('Please wait for conversation to load, or try refreshing the page.');
       return;
     }
 
@@ -411,16 +401,6 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
     }
   };
 
-  if (isInitializing) {
-    return (
-      <div className="flex items-center justify-center h-screen w-full">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-          <p className="mt-4 text-muted-foreground">Initializing chat...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[hsl(var(--background))]">
@@ -647,11 +627,13 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={
-                  !conversationId || !userId
-                    ? "Chat not ready..."
+                  !userId
+                    ? "Signing in..."
+                    : !conversationId
+                    ? "Loading conversation..."
                     : "Type your message..."
                 }
-                disabled={isLoading || !conversationId || !userId}
+                disabled={isLoading}
                 className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-card/50 backdrop-blur-sm focus:bg-card transition-colors"
               />
               <Button
