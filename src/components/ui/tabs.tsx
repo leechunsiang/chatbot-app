@@ -149,7 +149,7 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
     <div className={cn("w-full", className)}>
       {/* Tab Headers - Interactive Cards */}
       <div 
-        className="relative flex items-center gap-2 mb-12"
+        className="relative flex items-center gap-2 mb-6"
         onMouseLeave={() => setHoveredTab(null)}
       >
         {tabs.map((tab, index) => (
@@ -173,8 +173,11 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
 
       {/* Stacked Cards Container */}
       <div 
-        className="relative w-full min-h-[500px]" 
-        style={{ perspective: '2000px' }}
+        className="relative w-full" 
+        style={{ 
+          perspective: '2000px',
+          height: 'calc(100% - 4rem)'
+        }}
       >
         {tabs.map((tab, index) => {
           const isActive = index === activeTab;
@@ -193,10 +196,15 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
           let stackLayer = 0;
           let animationState: 'active' | 'entering' | 'exiting' | 'stacked' | 'hidden' = 'hidden';
           
-          if (isActive) {
+          // Active card should ALWAYS remain in active state, even when hovering
+          if (isActive && !isAnimating) {
             zIndex = 100;
             stackLayer = 0;
-            animationState = isAnimating ? 'entering' : 'active';
+            animationState = 'active';
+          } else if (isActive && isAnimating) {
+            zIndex = 100;
+            stackLayer = 0;
+            animationState = 'entering';
           } else if (wasPrevious && isAnimating) {
             zIndex = 90;
             stackLayer = 0;
@@ -216,36 +224,32 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
           let scale = 1;
           let opacity = 1;
           let rotateX = 0;
-          let blur = 0;
           
           if (animationState === 'active') {
-            // Active card at front
+            // Active card at front - always 100% opacity
             y = 0;
             scale = 1;
             opacity = 1;
             rotateX = 0;
-            blur = 0;
           } else if (animationState === 'entering') {
             // New card coming forward - starts from below and springs up
             y = 0;
             scale = 1;
             opacity = 1;
             rotateX = 0;
-            blur = 0;
           } else if (animationState === 'exiting') {
             // Old card moving back - lifts up as it recedes
             y = -80;
             scale = 0.85;
             opacity = 0.4;
             rotateX = -12;
-            blur = 3;
           } else if (animationState === 'stacked') {
-            // Stacked preview cards
+            // Stacked preview cards - but keep active card at 100% opacity
             y = -stackLayer * 25;
             scale = Math.max(0.8, 1 - stackLayer * 0.04);
-            opacity = Math.max(0.5, 1 - stackLayer * 0.15);
+            // Active card stays at full opacity when hovering
+            opacity = isActive ? 1 : Math.max(0.5, 1 - stackLayer * 0.15);
             rotateX = -stackLayer * 4;
-            blur = Math.min(stackLayer * 0.5, 2);
           } else {
             // Hidden - not visible
             opacity = 0;
@@ -266,7 +270,6 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
                       scale: 0.9,
                       opacity: 0.5,
                       rotateX: 10,
-                      filter: 'blur(4px)',
                     }
                   : false
               }
@@ -278,7 +281,6 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
                 opacity: shouldShow ? opacity : 0,
                 rotateX,
                 rotateY: 0,
-                filter: `blur(${blur}px)`,
               }}
               transition={{
                 type: 'spring',
@@ -295,7 +297,7 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
               }}
             >
               <div className={cn(
-                "w-full h-full rounded-xl shadow-2xl overflow-hidden border transition-colors",
+                "w-full h-full rounded-3xl shadow-2xl border transition-colors",
                 isActive 
                   ? 'border-blue-500/50 shadow-blue-500/20' 
                   : 'border-gray-300 dark:border-gray-600'
