@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tabs } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { SimplifiedChat } from '@/components/SimplifiedChat';
 import { Auth } from '@/components/Auth';
 import { HRDashboard } from '@/components/dashboard/HRDashboard';
@@ -15,12 +16,20 @@ type UserRole = 'employee' | 'manager' | 'hr_admin';
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingPhase, setLoadingPhase] = useState<string>('Initializing...');
   const [userRole, setUserRole] = useState<UserRole>('employee');
   const [userEmail, setUserEmail] = useState<string>('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const fetchUserRole = async (userId: string): Promise<UserRole> => {
+  const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
+      // Ensure user exists and fetch role in parallel operations where possible
+      console.log('🔄 Ensuring user and fetching role for:', userId);
+
+      await ensureUserExists(userId, email);
+
+      // Fetch user profile with role
       const { data: profile, error } = await supabase
         .from('users')
         .select('role')
@@ -28,7 +37,7 @@ export function App() {
         .maybeSingle();
 
       if (error) {
-        console.log('⚠️ Error fetching user role:', error.message);
+        console.log('⚠️ Error fetching user profile:', error.message);
         return 'employee';
       }
 
@@ -40,29 +49,28 @@ export function App() {
       console.log('⚠️ No user profile found, defaulting to employee');
       return 'employee';
     } catch (err) {
-      console.error('❌ Error fetching user role:', err);
+      console.error('❌ Error in ensureUserAndFetchRole:', err);
       return 'employee';
     }
   };
 
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
+    let mounted = true;
 
     const initAuth = async () => {
       try {
-        console.log('🔐 Initializing auth...');
+        if (!mounted) return;
 
-        // Set a timeout to prevent infinite loading
-        timeoutId = setTimeout(() => {
-          console.warn('⚠️ Auth initialization timeout - continuing anyway');
-          setIsLoading(false);
-        }, 10000); // 10 second timeout
+        console.log('🔐 Initializing auth...');
+        setLoadingPhase('Checking session...');
 
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
+        if (!mounted) return;
+
         if (sessionError) {
           console.error('❌ Session error:', sessionError);
-          clearTimeout(timeoutId);
+          setAuthError('Failed to load session. Please try refreshing the page.');
           setIsLoading(false);
           return;
         }
@@ -70,36 +78,41 @@ export function App() {
         console.log('✅ Session loaded:', !!session);
         setIsAuthenticated(!!session);
 
-        // Fetch user role from profile if logged in
         if (session?.user) {
-          console.log('👤 Fetching user role for:', session.user.id);
+          if (!mounted) return;
+
+          console.log('👤 Setting up user profile for:', session.user.id);
+          setLoadingPhase('Loading your profile...');
           setUserId(session.user.id);
           setUserEmail(session.user.email || '');
 
-          // Ensure user record exists (fallback if trigger didn't fire)
           try {
-            console.log('🔄 Ensuring user record exists...');
-            await ensureUserExists(session.user.id, session.user.email || '');
-            console.log('✅ User record confirmed');
+            const role = await ensureUserAndFetchRole(session.user.id, session.user.email || '');
+            if (mounted) {
+              setUserRole(role);
+            }
           } catch (err) {
-            console.error('⚠️ Could not ensure user exists:', err);
-            // Continue anyway - the conversation creation will handle this
+            console.error('⚠️ Could not load user profile:', err);
+            if (mounted) {
+              setUserRole('employee');
+            }
           }
-
-          const role = await fetchUserRole(session.user.id);
-          setUserRole(role);
         } else {
-          setUserId(null);
-          setUserEmail('');
+          if (mounted) {
+            setUserId(null);
+            setUserEmail('');
+          }
         }
-
-        clearTimeout(timeoutId);
       } catch (err) {
         console.error('❌ Auth initialization error:', err);
-        clearTimeout(timeoutId);
+        if (mounted) {
+          setAuthError('An error occurred during initialization. Please try refreshing.');
+        }
       } finally {
-        console.log('✅ Auth initialization complete');
-        setIsLoading(false);
+        if (mounted) {
+          console.log('✅ Auth initialization complete');
+          setIsLoading(false);
+        }
       }
     };
 
@@ -107,7 +120,9 @@ export function App() {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (!mounted) return;
+
         console.log('🔄 Auth state changed:', event, { hasSession: !!session });
 
         // Handle sign out explicitly
@@ -117,34 +132,37 @@ export function App() {
           setUserId(null);
           setUserEmail('');
           setUserRole('employee');
+          setAuthError(null);
           return;
         }
 
         // Handle sign in
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || session) {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           console.log('✅ User authenticated, updating state');
           setIsAuthenticated(true);
           setUserId(session.user.id);
           setUserEmail(session.user.email || '');
+          setAuthError(null);
 
-          try {
-            console.log('🔄 Ensuring user record exists in auth state change...');
-            await ensureUserExists(session.user.id, session.user.email || '');
-            console.log('✅ User record confirmed in auth state change');
-
-            const role = await fetchUserRole(session.user.id);
-            setUserRole(role);
-          } catch (err) {
-            console.error('⚠️ Error in auth state change handler:', err);
-            setUserRole('employee');
-            // Continue - the conversation creation will handle user creation if needed
-          }
+          // Update user profile in background
+          ensureUserAndFetchRole(session.user.id, session.user.email || '')
+            .then((role) => {
+              if (mounted) {
+                setUserRole(role);
+              }
+            })
+            .catch((err) => {
+              console.error('⚠️ Error in auth state change handler:', err);
+              if (mounted) {
+                setUserRole('employee');
+              }
+            });
         }
       }
     );
 
     return () => {
-      clearTimeout(timeoutId);
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -152,10 +170,23 @@ export function App() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg font-medium mb-2">{loadingPhase}</p>
+          {authError && (
+            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg max-w-md">
+              <p className="text-sm text-red-600 dark:text-red-400">{authError}</p>
+              <Button
+                onClick={() => window.location.reload()}
+                className="mt-3"
+                variant="outline"
+                size="sm"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );

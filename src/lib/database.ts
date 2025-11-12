@@ -221,80 +221,54 @@ export async function searchSimilarMessages(
 
 /**
  * Ensure user record exists in public.users table
- * Creates one if it doesn't exist (fallback if trigger didn't fire)
+ * Uses upsert to create or return existing user (fallback if trigger didn't fire)
  */
 export async function ensureUserExists(userId: string, email: string) {
-  console.log('🔍 Checking if user exists...', { userId, email });
+  console.log('🔍 Ensuring user exists...', { userId, email });
 
   try {
-    // First check if user exists
-    const { data: existingUser, error: selectError } = await supabase
+    // Use upsert (insert with on_conflict do nothing) for atomic operation
+    const { data, error } = await supabase
       .from('users')
+      .upsert({
+        id: userId,
+        email: email,
+        role: 'employee'
+      }, {
+        onConflict: 'id',
+        ignoreDuplicates: true
+      })
       .select('id, email, role')
-      .eq('id', userId)
       .maybeSingle();
 
-    if (selectError) {
-      console.error('❌ Error checking user existence:', {
-        error: selectError,
-        message: selectError.message,
-        code: selectError.code,
-        details: selectError.details
+    if (error) {
+      console.error('❌ Error upserting user:', {
+        error,
+        message: error.message,
+        code: error.code,
+        details: error.details
       });
-      throw selectError;
-    }
 
-    if (!existingUser) {
-      console.log('📝 User not found, creating user record...', { userId, email });
+      // If it's a unique constraint violation, the user exists - that's fine
+      if (error.code === '23505') {
+        console.log('⚠️ User already exists (concurrent creation), fetching user...');
 
-      const { data: insertedUser, error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: email,
-          role: 'employee'
-        })
-        .select()
-        .maybeSingle();
+        // Fetch the existing user
+        const { data: existingUser, error: fetchError } = await supabase
+          .from('users')
+          .select('id, email, role')
+          .eq('id', userId)
+          .maybeSingle();
 
-      if (insertError) {
-        // Check if error is due to duplicate key (user was created by trigger or another process)
-        if (insertError.code === '23505') {
-          console.log('⚠️ User record already exists (created by another process), continuing...');
-          return;
-        }
-
-        console.error('❌ Error creating user record:', {
-          error: insertError,
-          message: insertError.message,
-          details: insertError.details,
-          hint: insertError.hint,
-          code: insertError.code
-        });
-        throw insertError;
+        if (fetchError) throw fetchError;
+        console.log('✅ User fetched:', existingUser);
+        return;
       }
 
-      console.log('✅ User record created successfully:', insertedUser);
-
-      // Wait a moment for the database to fully commit the transaction
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Verify the user was actually created
-      const { data: verifyUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (!verifyUser) {
-        console.error('❌ User creation verification failed');
-        throw new Error('User record was not found after creation');
-      }
-
-      console.log('✅ User creation verified');
-    } else {
-      console.log('✅ User already exists in database:', existingUser);
+      throw error;
     }
+
+    console.log('✅ User ensured:', data || 'already existed');
   } catch (err) {
     console.error('❌ Error ensuring user exists:', err);
     throw err;
