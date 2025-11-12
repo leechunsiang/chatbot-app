@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -10,7 +8,8 @@ type Tab = {
   content?: string | React.ReactNode | any;
 };
 
-export const Tabs = ({
+// Original Tabs component (kept for backward compatibility)
+export const TabsOriginal = ({
   tabs: propTabs,
   containerClassName,
   activeTabClassName,
@@ -115,3 +114,200 @@ export const FadeInDiv = ({
     </div>
   );
 };
+
+// Enhanced Tabs with Rich Page-Like Transitions
+interface TabItem {
+  label: string;
+  content: React.ReactNode;
+}
+
+interface TabsProps {
+  tabs: TabItem[];
+  defaultActive?: number;
+  className?: string;
+}
+
+export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => {
+  const [activeTab, setActiveTab] = useState(defaultActive);
+  const [hoveredTab, setHoveredTab] = useState<number | null>(null);
+  const [previousTab, setPreviousTab] = useState(defaultActive);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const handleTabChange = (newIndex: number) => {
+    if (newIndex === activeTab) return;
+    
+    setPreviousTab(activeTab);
+    setActiveTab(newIndex);
+    // Don't clear hover when switching - let the user control it
+    setIsAnimating(true);
+    
+    // Reset animation flag after transition
+    setTimeout(() => setIsAnimating(false), 1000);
+  };
+
+  return (
+    <div className={cn("w-full", className)}>
+      {/* Tab Headers - Interactive Cards */}
+      <div 
+        className="relative flex items-center gap-2 mb-12"
+        onMouseLeave={() => setHoveredTab(null)}
+      >
+        {tabs.map((tab, index) => (
+          <motion.button
+            key={index}
+            onClick={() => handleTabChange(index)}
+            onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
+            className={cn(
+              "relative px-6 py-3 text-sm font-medium transition-all rounded-lg",
+              activeTab === index
+                ? 'text-white bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+            )}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {tab.label}
+          </motion.button>
+        ))}
+      </div>
+
+      {/* Stacked Cards Container */}
+      <div 
+        className="relative w-full min-h-[500px]" 
+        style={{ perspective: '2000px' }}
+      >
+        {tabs.map((tab, index) => {
+          const isActive = index === activeTab;
+          const wasPrevious = index === previousTab;
+          
+          // Show card if: 
+          // - it's active
+          // - was previous (for exit animation)
+          // - we're hovering over navigation and it's not involved in current animation
+          const isInTransition = isAnimating && (isActive || wasPrevious);
+          const isStackedPreview = hoveredTab !== null && !isActive && !(isAnimating && wasPrevious);
+          const shouldShow = isActive || isInTransition || isStackedPreview;
+          
+          // Calculate stack position for inactive cards
+          let zIndex = 0;
+          let stackLayer = 0;
+          let animationState: 'active' | 'entering' | 'exiting' | 'stacked' | 'hidden' = 'hidden';
+          
+          if (isActive) {
+            zIndex = 100;
+            stackLayer = 0;
+            animationState = isAnimating ? 'entering' : 'active';
+          } else if (wasPrevious && isAnimating) {
+            zIndex = 90;
+            stackLayer = 0;
+            animationState = 'exiting';
+          } else if (isStackedPreview) {
+            // Create stack order based on distance from active tab
+            const distance = Math.abs(index - activeTab);
+            stackLayer = distance;
+            zIndex = 50 - distance;
+            animationState = 'stacked';
+          } else {
+            animationState = 'hidden';
+          }
+          
+          // Calculate animation values based on state and direction
+          let y = 0;
+          let scale = 1;
+          let opacity = 1;
+          let rotateX = 0;
+          let blur = 0;
+          
+          if (animationState === 'active') {
+            // Active card at front
+            y = 0;
+            scale = 1;
+            opacity = 1;
+            rotateX = 0;
+            blur = 0;
+          } else if (animationState === 'entering') {
+            // New card coming forward - starts from below and springs up
+            y = 0;
+            scale = 1;
+            opacity = 1;
+            rotateX = 0;
+            blur = 0;
+          } else if (animationState === 'exiting') {
+            // Old card moving back - lifts up as it recedes
+            y = -80;
+            scale = 0.85;
+            opacity = 0.4;
+            rotateX = -12;
+            blur = 3;
+          } else if (animationState === 'stacked') {
+            // Stacked preview cards
+            y = -stackLayer * 25;
+            scale = Math.max(0.8, 1 - stackLayer * 0.04);
+            opacity = Math.max(0.5, 1 - stackLayer * 0.15);
+            rotateX = -stackLayer * 4;
+            blur = Math.min(stackLayer * 0.5, 2);
+          } else {
+            // Hidden - not visible
+            opacity = 0;
+          }
+          
+          return (
+            <motion.div
+              key={index}
+              className="absolute inset-0 w-full"
+              style={{
+                transformStyle: 'preserve-3d',
+                pointerEvents: isActive ? 'auto' : 'none',
+              }}
+              initial={
+                animationState === 'entering' 
+                  ? {
+                      y: 60,
+                      scale: 0.9,
+                      opacity: 0.5,
+                      rotateX: 10,
+                      filter: 'blur(4px)',
+                    }
+                  : false
+              }
+              animate={{
+                zIndex,
+                y,
+                x: 0,
+                scale,
+                opacity: shouldShow ? opacity : 0,
+                rotateX,
+                rotateY: 0,
+                filter: `blur(${blur}px)`,
+              }}
+              transition={{
+                type: 'spring',
+                stiffness: 200,
+                damping: 25,
+                mass: 1.2,
+                // Add slight bounce for vertical motion
+                y: {
+                  type: 'spring',
+                  stiffness: 180,
+                  damping: 20,
+                  mass: 1.5,
+                },
+              }}
+            >
+              <div className={cn(
+                "w-full h-full rounded-xl shadow-2xl overflow-hidden border transition-colors",
+                isActive 
+                  ? 'border-blue-500/50 shadow-blue-500/20' 
+                  : 'border-gray-300 dark:border-gray-600'
+              )}>
+                {tab.content}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+export default Tabs;
