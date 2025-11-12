@@ -127,24 +127,60 @@ export async function searchDocumentChunks(
 }
 
 /**
- * Extract text content from a PDF file
- * Note: This is a simplified version. For production, you should process PDFs on the backend.
+ * Extract text from PDF using backend Edge Function
  */
-export async function extractTextFromPDF(_file: File): Promise<string> {
-  // PDF text extraction in the browser is complex and requires special handling.
-  // For now, we'll return a placeholder message.
-  // 
-  // Options for production:
-  // 1. Process PDFs on a backend server (recommended)
-  // 2. Use a paid service like AWS Textract or Google Document AI
-  // 3. Use Mozilla PDF.js with proper worker setup
-  
-  console.warn('PDF text extraction not yet implemented. Document will be uploaded but not processed for RAG.');
-  
-  throw new Error(
-    'PDF text extraction is not yet configured. ' +
-    'Please contact your administrator to enable document processing.'
-  );
+export async function extractTextFromPDF(
+  filePath: string,
+  documentId: string
+): Promise<{ text: string; metadata: { pages: number; length: number } }> {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase configuration');
+    }
+
+    const session = await supabase.auth.getSession();
+    if (!session.data.session) {
+      throw new Error('Not authenticated');
+    }
+
+    const functionUrl = `${supabaseUrl}/functions/v1/process-pdf`;
+
+    console.log('Calling Edge Function to extract PDF text...');
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.data.session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filePath,
+        documentId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'PDF processing failed');
+    }
+
+    return {
+      text: result.text,
+      metadata: result.metadata || { pages: 0, length: result.text.length },
+    };
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    throw error;
+  }
 }
 
 /**

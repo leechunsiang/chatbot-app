@@ -17,6 +17,10 @@ export interface PolicyDocument {
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
+  processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  processed_at?: string | null;
+  processing_error?: string | null;
+  extracted_text_length?: number;
 }
 
 export interface CreateDocumentInput {
@@ -117,17 +121,10 @@ export async function createPolicyDocument(
 
     if (error) throw error;
 
-    // Process document for RAG if it's a PDF and published
     if (file.type === 'application/pdf' && metadata.status === 'published') {
-      try {
-        console.log('📄 Extracting text from PDF for RAG processing...');
-        const documentText = await extractTextFromPDF(file);
-        await processDocumentForRAG(data.id, documentText);
-        console.log('✅ Document processed for RAG');
-      } catch (ragError) {
-        console.error('⚠️ Failed to process document for RAG:', ragError);
-        // Don't fail the upload if RAG processing fails
-      }
+      processDocumentAsync(data.id, uploadResult.path).catch(error => {
+        console.error('Background processing error:', error);
+      });
     }
 
     return data;
@@ -206,6 +203,69 @@ export async function getDocumentStats() {
     return stats;
   } catch (error) {
     console.error('Error fetching document stats:', error);
+    throw error;
+  }
+}
+
+/**
+ * Process document asynchronously in the background
+ */
+async function processDocumentAsync(documentId: string, filePath: string): Promise<void> {
+  try {
+    await supabase
+      .from('policy_documents')
+      .update({ processing_status: 'processing' })
+      .eq('id', documentId);
+
+    console.log('📄 Extracting text from PDF using Edge Function...');
+
+    const result = await extractTextFromPDF(filePath, documentId);
+
+    console.log(`✅ Text extracted: ${result.text.length} characters from ${result.metadata.pages} pages`);
+
+    await processDocumentForRAG(documentId, result.text);
+
+    await supabase
+      .from('policy_documents')
+      .update({
+        processing_status: 'completed',
+        processed_at: new Date().toISOString(),
+        extracted_text_length: result.text.length,
+        processing_error: null,
+      })
+      .eq('id', documentId);
+
+    console.log('✅ Document fully processed for RAG');
+  } catch (error) {
+    console.error('⚠️ Failed to process document:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+
+    await supabase
+      .from('policy_documents')
+      .update({
+        processing_status: 'failed',
+        processing_error: errorMessage,
+      })
+      .eq('id', documentId);
+  }
+}
+
+/**
+ * Reprocess a document (for failed or outdated documents)
+ */
+export async function reprocessDocument(documentId: string): Promise<void> {
+  try {
+    const document = await getPolicyDocument(documentId);
+    if (!document) throw new Error('Document not found');
+
+    if (document.file_type !== 'application/pdf') {
+      throw new Error('Only PDF documents can be reprocessed');
+    }
+
+    await processDocumentAsync(documentId, document.file_path);
+  } catch (error) {
+    console.error('Error reprocessing document:', error);
     throw error;
   }
 }

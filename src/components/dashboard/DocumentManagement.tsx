@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Search, FileText, Download, Loader2, X, AlertCircle } from 'lucide-react';
-import { getPolicyDocuments, createPolicyDocument, deletePolicyDocument, type PolicyDocument } from '@/lib/documents';
+import { Upload, Search, FileText, Download, Loader2, X, AlertCircle, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { getPolicyDocuments, createPolicyDocument, deletePolicyDocument, reprocessDocument, type PolicyDocument } from '@/lib/documents';
 import { getDocumentPublicUrl } from '@/lib/storage';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -131,6 +131,46 @@ export function DocumentManagement() {
     }
   };
 
+  const handleReprocess = async (doc: PolicyDocument) => {
+    if (!confirm(`Reprocess "${doc.title}"? This will re-extract text and recreate embeddings.`)) return;
+
+    try {
+      setError(null);
+      await reprocessDocument(doc.id);
+      await loadDocuments();
+    } catch (err) {
+      console.error('Error reprocessing document:', err);
+      setError('Failed to reprocess document');
+    }
+  };
+
+  const getProcessingStatusBadge = (doc: PolicyDocument) => {
+    if (!doc.processing_status || doc.file_type !== 'application/pdf') return null;
+
+    const statusConfig = {
+      pending: { icon: Clock, label: 'Pending', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+      processing: { icon: Loader2, label: 'Processing', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+      completed: { icon: CheckCircle, label: 'Processed', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+      failed: { icon: XCircle, label: 'Failed', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+    };
+
+    const config = statusConfig[doc.processing_status];
+    if (!config) return null;
+
+    const Icon = config.icon;
+    const isSpinning = doc.processing_status === 'processing';
+
+    return (
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 whitespace-nowrap ${config.className}`}
+        title={doc.processing_error || config.label}
+      >
+        <Icon className={`h-3 w-3 ${isSpinning ? 'animate-spin' : ''}`} />
+        {config.label}
+      </span>
+    );
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return 'Unknown';
     const mb = bytes / (1024 * 1024);
@@ -231,6 +271,12 @@ export function DocumentManagement() {
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
               </select>
+              {uploadFile?.type === 'application/pdf' && uploadStatus === 'published' && (
+                <p className="text-xs text-muted-foreground mt-2 flex items-start gap-1">
+                  <AlertCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  <span>Published PDFs are automatically processed for chatbot search. This may take a few moments after upload.</span>
+                </p>
+              )}
             </div>
             <div className="flex gap-2 justify-end">
               <Button
@@ -349,6 +395,17 @@ export function DocumentManagement() {
                     >
                       {doc.status}
                     </span>
+                    {getProcessingStatusBadge(doc)}
+                    {doc.file_type === 'application/pdf' && (doc.processing_status === 'failed' || doc.processing_status === 'pending') && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleReprocess(doc)}
+                        title="Reprocess document"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)} title="Download">
                       <Download className="h-4 w-4" />
                     </Button>
