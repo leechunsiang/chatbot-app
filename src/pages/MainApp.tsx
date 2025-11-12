@@ -5,6 +5,7 @@ import { SimplifiedChat } from '@/components/SimplifiedChat';
 import { Auth } from '@/components/Auth';
 import { HRDashboard } from '@/components/dashboard/HRDashboard';
 import { FAQManagement } from '@/components/dashboard/FAQManagement';
+import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { ensureUserExists } from '@/lib/database';
 import { FileText, Gift, HelpCircle } from 'lucide-react';
@@ -15,6 +16,8 @@ export function MainApp() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState<UserRole>('employee');
+  const [userEmail, setUserEmail] = useState<string>('');
+  const [userId, setUserId] = useState<string | null>(null);
 
   const fetchUserRole = async (userId: string): Promise<UserRole> => {
     try {
@@ -70,6 +73,8 @@ export function MainApp() {
         // Fetch user role from profile if logged in
         if (session?.user) {
           console.log('👤 Fetching user role for:', session.user.id);
+          setUserId(session.user.id);
+          setUserEmail(session.user.email || '');
 
           // Ensure user record exists (fallback if trigger didn't fire)
           try {
@@ -80,6 +85,9 @@ export function MainApp() {
 
           const role = await fetchUserRole(session.user.id);
           setUserRole(role);
+        } else {
+          setUserId(null);
+          setUserEmail('');
         }
 
         clearTimeout(timeoutId);
@@ -98,7 +106,20 @@ export function MainApp() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('🔄 Auth state changed:', event);
+        
+        // Handle sign out explicitly
+        if (event === 'SIGNED_OUT') {
+          console.log('👋 User signed out, clearing state');
+          setIsAuthenticated(false);
+          setUserId(null);
+          setUserEmail('');
+          setUserRole('employee');
+          return;
+        }
+        
         setIsAuthenticated(!!session);
+        setUserId(session?.user?.id || null);
+        setUserEmail(session?.user?.email || '');
 
         if (session?.user) {
           try {
@@ -140,22 +161,23 @@ export function MainApp() {
           <CardContent className="pt-6">
             <Auth onAuthSuccess={async () => {
               console.log('🔵 Auth success callback triggered');
-              // Immediately set authenticated to remove auth screen
-              setIsAuthenticated(true);
-              
-              // Then fetch user role in the background
-              try {
-                const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user) {
-                  const role = await fetchUserRole(session.user.id);
-                  setUserRole(role);
-                }
-              } catch (err) {
-                console.error('Error fetching user role after auth:', err);
-              }
+              // Don't set loading - let the auth state change handler do it
+              // The auth state change listener will set userId
             }} />
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  // Wait for userId to be loaded before rendering main app
+  if (!userId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Setting up your session...</p>
+        </div>
       </div>
     );
   }
@@ -164,7 +186,7 @@ export function MainApp() {
   const tabs = [
     {
       label: '💬 Chatbot',
-      content: <SimplifiedChat />,
+      content: <SimplifiedChat initialUserId={userId} />,
     },
     {
       label: '📄 Policy',
@@ -236,6 +258,24 @@ export function MainApp() {
 
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 px-3 py-4 md:px-4 md:py-6 overflow-hidden">
+      {/* User Menu - Fixed to top right */}
+      <div className="fixed top-4 right-4 md:top-6 md:right-6 z-50">
+        <UserMenu
+          isAuthenticated={isAuthenticated}
+          userEmail={userEmail}
+          onAuthRequired={async () => {
+            console.log('🚪 onAuthRequired called - logging out');
+            // Sign out from Supabase
+            await supabase.auth.signOut({ scope: 'global' });
+            // Clear state immediately (auth listener will also handle this)
+            setIsAuthenticated(false);
+            setUserId(null);
+            setUserEmail('');
+            setUserRole('employee');
+          }}
+        />
+      </div>
+      
       <div className="h-full w-full">
         {/* Tabs with Stacked Cards */}
         <Tabs tabs={tabs} defaultActive={0} className="h-full" />

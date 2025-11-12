@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, AlertCircle } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, Plus, MessageSquare, Menu, X, Trash2 } from 'lucide-react';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
-import { createConversation, createMessage } from '@/lib/database';
+import { createConversation, createMessage, getUserConversations, getConversationMessages, deleteConversation } from '@/lib/database';
 import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
+import type { Database } from '@/lib/database.types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -14,7 +15,13 @@ interface Message {
   id?: string;
 }
 
-export function SimplifiedChat() {
+type Conversation = Database['public']['Tables']['conversations']['Row'];
+
+interface SimplifiedChatProps {
+  initialUserId?: string | null;
+}
+
+export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +29,8 @@ export function SimplifiedChat() {
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize OpenAI client
@@ -39,63 +48,47 @@ export function SimplifiedChat() {
   }, [messages]);
 
   useEffect(() => {
+    // Don't run if we're still waiting for parent to provide userId
+    if (initialUserId === undefined) {
+      console.log('🔵 SimplifiedChat: Waiting for parent to provide userId...');
+      return;
+    }
+
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
+    let timeoutId: NodeJS.Timeout | undefined;
 
     const initChat = async () => {
       try {
-        console.log('🔵 SimplifiedChat: Initializing chat...');
+        console.log('🔵 SimplifiedChat: Initializing chat...', { initialUserId });
 
-        // Set a maximum timeout to guarantee initialization completes
-        timeoutId = setTimeout(() => {
-          if (mounted && isInitializing) {
-            console.warn('⚠️ SimplifiedChat: Initialization timeout - enabling guest mode');
-            setUserId('guest');
-            setConversationId('guest-conversation');
-            setIsInitializing(false);
+        // If we have a real user ID from parent
+        if (initialUserId && initialUserId !== 'guest') {
+          console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
+          if (mounted) {
+            setUserId(initialUserId);
+            setIsInitializing(false); // Mark as initialized immediately
           }
-        }, 8000);
-
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-
-        if (sessionError) {
-          console.error('❌ SimplifiedChat: Session error:', sessionError);
-          clearTimeout(timeoutId);
-          setError('Failed to get session');
-          setUserId('guest');
-          setConversationId('guest-conversation');
-          setIsInitializing(false);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('✅ SimplifiedChat: User found:', session.user.id);
-          setUserId(session.user.id);
-
-          // Create a new conversation
+          
           try {
             console.log('🔵 SimplifiedChat: Creating conversation...');
-            const newConversation = await createConversation(session.user.id, 'New Chat');
+            const newConversation = await createConversation(initialUserId, 'New Chat');
             console.log('✅ SimplifiedChat: Conversation created:', newConversation.id);
             if (mounted) {
-              clearTimeout(timeoutId);
               setConversationId(newConversation.id);
-              setIsInitializing(false);
             }
           } catch (convErr) {
             console.error('❌ SimplifiedChat: Error creating conversation:', convErr);
             if (mounted) {
-              clearTimeout(timeoutId);
-              setUserId('guest');
-              setConversationId('guest-conversation');
-              setIsInitializing(false);
+              // Don't fall back to guest - keep user authenticated
+              setConversationId(`temp-conversation-${Date.now()}`);
             }
           }
-        } else {
-          console.log('⚠️ SimplifiedChat: No session found, enabling guest mode');
-          clearTimeout(timeoutId);
+          return; // Exit early
+        }
+
+        // If parent explicitly set guest or null, enable guest mode
+        console.log('🔵 SimplifiedChat: Enabling guest mode');
+        if (mounted) {
           setUserId('guest');
           setConversationId('guest-conversation');
           setIsInitializing(false);
@@ -103,9 +96,14 @@ export function SimplifiedChat() {
       } catch (err) {
         console.error('❌ SimplifiedChat: Error initializing chat:', err);
         if (mounted) {
-          clearTimeout(timeoutId);
-          setUserId('guest');
-          setConversationId('guest-conversation');
+          // If we had a valid userId, keep it
+          if (initialUserId && initialUserId !== 'guest') {
+            setUserId(initialUserId);
+            setConversationId(`temp-conversation-${Date.now()}`);
+          } else {
+            setUserId('guest');
+            setConversationId('guest-conversation');
+          }
           setIsInitializing(false);
         }
       }
@@ -113,14 +111,23 @@ export function SimplifiedChat() {
 
     initChat();
 
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [initialUserId]); // Re-run when userId is provided by parent
+
+  // Separate effect for auth state changes
+  useEffect(() => {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('🔄 SimplifiedChat: Auth state changed:', event, !!session);
 
-        // Only handle SIGNED_OUT event - don't re-initialize on SIGNED_IN
-        // The initial load handles the signed-in state
-        if (event === 'SIGNED_OUT' && mounted) {
+        // Handle SIGNED_OUT event
+        if (event === 'SIGNED_OUT') {
           console.log('👋 SimplifiedChat: User signed out, switching to guest mode');
           setUserId('guest');
           setConversationId('guest-conversation');
@@ -130,8 +137,6 @@ export function SimplifiedChat() {
     );
 
     return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
@@ -155,6 +160,79 @@ export function SimplifiedChat() {
       console.warn('⚠️ Failed to save message, continuing anyway');
     }
   };
+
+  const loadConversations = async () => {
+    if (!userId || userId === 'guest') return;
+    
+    try {
+      const convs = await getUserConversations(userId);
+      setConversations(convs);
+    } catch (err) {
+      console.error('Error loading conversations:', err);
+    }
+  };
+
+  const loadConversationMessages = async (convId: string) => {
+    try {
+      const msgs = await getConversationMessages(convId);
+      const formattedMessages: Message[] = msgs.map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        id: msg.id
+      }));
+      setMessages(formattedMessages);
+    } catch (err) {
+      console.error('Error loading messages:', err);
+      setMessages([]);
+    }
+  };
+
+  const handleNewChat = async () => {
+    if (!userId || userId === 'guest') return;
+    
+    try {
+      const newConv = await createConversation(userId, 'New Chat');
+      setConversationId(newConv.id);
+      setMessages([]);
+      await loadConversations();
+      setIsSidebarOpen(false);
+    } catch (err) {
+      console.error('Error creating new chat:', err);
+      setError('Failed to create new chat');
+    }
+  };
+
+  const handleSwitchConversation = async (convId: string) => {
+    setConversationId(convId);
+    await loadConversationMessages(convId);
+    setIsSidebarOpen(false);
+  };
+
+  const handleDeleteConversation = async (convId: string) => {
+    if (!userId || userId === 'guest') return;
+    
+    try {
+      await deleteConversation(convId);
+      await loadConversations();
+      
+      // If we deleted the current conversation, create a new one
+      if (convId === conversationId) {
+        const newConv = await createConversation(userId, 'New Chat');
+        setConversationId(newConv.id);
+        setMessages([]);
+      }
+    } catch (err) {
+      console.error('Error deleting conversation:', err);
+      setError('Failed to delete conversation');
+    }
+  };
+
+  // Load conversations when userId changes
+  useEffect(() => {
+    if (userId && userId !== 'guest') {
+      loadConversations();
+    }
+  }, [userId]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,132 +310,224 @@ ${context}`
   };
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-950/30 dark:to-purple-950/30">
-      <div className="flex flex-col h-full max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 overflow-hidden">
-        {/* Error Banner */}
-        {error && (
-          <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm text-destructive font-semibold">Error</p>
-              <p className="text-sm text-destructive/80">{error}</p>
-            </div>
+    <div className="flex h-full w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-950/30 dark:to-purple-950/30">
+      {/* Sidebar */}
+      <div
+        className={`${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-border/50 transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Sidebar Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border/50">
+            <h2 className="text-lg font-semibold">Chats</h2>
             <button
-              onClick={() => setError(null)}
-              className="text-destructive hover:text-destructive/80 text-xl leading-none"
+              onClick={() => setIsSidebarOpen(false)}
+              className="md:hidden p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
             >
-              ×
+              <X className="w-5 h-5" />
             </button>
           </div>
-        )}
 
-        {/* Header */}
-        <div className="flex items-center justify-center mb-6 sm:mb-6 flex-shrink-0">
-          <Bot className="w-8 h-8 sm:w-10 sm:h-10 mr-3 text-blue-600 dark:text-blue-400" />
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            HR Assistant
-          </h1>
-        </div>
+          {/* New Chat Button */}
+          <div className="p-4">
+            <Button
+              onClick={handleNewChat}
+              disabled={!userId || userId === 'guest'}
+              className="w-full justify-start gap-2"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4" />
+              New Chat
+            </Button>
+          </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 min-h-0 border border-border/50 rounded-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden shadow-lg mb-6 flex-shrink">
-          <ScrollArea className="h-full">
-            <div className="p-6 sm:p-8 space-y-6 min-h-full">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-20">
-                  <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
-                  <p className="text-lg sm:text-xl text-center px-4 font-medium">
-                    Start a conversation with GPT-4.1-nano
-                  </p>
-                  <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
-                    Type a message below to begin
-                  </p>
+          {/* Conversations List */}
+          <ScrollArea className="flex-1 px-2">
+            <div className="space-y-1 pb-4">
+              {conversations.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No conversations yet
                 </div>
               ) : (
-                messages.map((message, index) => (
+                conversations.map((conv) => (
                   <div
-                    key={index}
-                    className={`flex gap-4 sm:gap-5 ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
+                    key={conv.id}
+                    className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                      conv.id === conversationId
+                        ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
-                    {message.role === 'assistant' && (
-                      <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
-                        <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                      </div>
-                    )}
+                    <MessageSquare className="w-4 h-4 flex-shrink-0" />
                     <div
-                      className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] shadow-sm ${
-                        message.role === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-slate-800 text-foreground border border-border/50'
-                      }`}
+                      onClick={() => handleSwitchConversation(conv.id)}
+                      className="flex-1 min-w-0"
                     >
-                      <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-                        {message.content}
+                      <p className="text-sm font-medium truncate">
+                        {conv.title || 'New Chat'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(conv.updated_at).toLocaleDateString()}
                       </p>
                     </div>
-                    {message.role === 'user' && (
-                      <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-600 flex items-center justify-center shadow-md">
-                        <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                      </div>
-                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteConversation(conv.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    </button>
                   </div>
                 ))
               )}
-              {isLoading && (
-                <div className="flex gap-4 sm:gap-5 justify-start">
-                  <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
-                    <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                  </div>
-                  <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-800 border border-border/50 shadow-sm">
-                    <div className="flex gap-1.5">
-                      <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
         </div>
+      </div>
 
-        {/* Input Area */}
-        <form onSubmit={sendMessage} className="flex-shrink-0">
-          <div className="flex gap-3 sm:gap-4">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                isInitializing
-                  ? "Initializing..."
-                  : !userId || userId === 'guest'
-                  ? "Type your message... (Guest mode - not saved)"
-                  : !conversationId || conversationId === 'guest-conversation'
-                  ? "Type your message... (Guest mode - not saved)"
-                  : "Type your message..."
-              }
-              disabled={isLoading || isInitializing}
-              className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-900 transition-colors"
-            />
+      {/* Backdrop for mobile */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+        />
+      )}
+
+      {/* Main Content */}
+      <div className="flex flex-col h-full flex-1 overflow-hidden">
+        <div className="flex flex-col h-full max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 overflow-hidden">
+          {/* Mobile Menu Button */}
+          <div className="flex items-center gap-4 mb-4 md:hidden">
             <Button
-              type="submit"
-              disabled={isLoading || !input.trim() || isInitializing}
+              onClick={() => setIsSidebarOpen(true)}
+              variant="outline"
               size="icon"
-              className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             >
-              <Send className="w-5 h-5 sm:w-6 sm:h-6" />
+              <Menu className="w-5 h-5" />
             </Button>
           </div>
-        </form>
 
-        {/* Footer */}
-        <div className="mt-4 text-center text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-          Powered by GPT-4.1-nano via GitHub Models
+          {/* Error Banner */}
+          {error && (
+            <div className="mb-4 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-destructive font-semibold">Error</p>
+                <p className="text-sm text-destructive/80">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-destructive hover:text-destructive/80 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Messages Area */}
+          <div className="flex-1 min-h-0 border border-border/50 rounded-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden shadow-lg mb-6 flex-shrink">
+            <ScrollArea className="h-full">
+              <div className="p-6 sm:p-8 space-y-6 min-h-full">
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-20">
+                    <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
+                    <p className="text-lg sm:text-xl text-center px-4 font-medium">
+                      Start a conversation with GPT-4.1-nano
+                    </p>
+                    <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
+                      Type a message below to begin
+                    </p>
+                  </div>
+                ) : (
+                  messages.map((message, index) => (
+                    <div
+                      key={index}
+                      className={`flex gap-4 sm:gap-5 ${
+                        message.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
+                          <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] shadow-sm ${
+                          message.role === 'user'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white dark:bg-slate-800 text-foreground border border-border/50'
+                        }`}
+                      >
+                        <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                          {message.content}
+                        </p>
+                      </div>
+                      {message.role === 'user' && (
+                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-600 flex items-center justify-center shadow-md">
+                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+                {isLoading && (
+                  <div className="flex gap-4 sm:gap-5 justify-start">
+                    <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
+                      <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                    </div>
+                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-800 border border-border/50 shadow-sm">
+                      <div className="flex gap-1.5">
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Input Area */}
+          <form onSubmit={sendMessage} className="flex-shrink-0">
+            <div className="flex gap-3 sm:gap-4">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={
+                  isInitializing
+                    ? "Initializing..."
+                    : !userId || userId === 'guest'
+                    ? "Type your message... (Guest mode - not saved)"
+                    : !conversationId || conversationId === 'guest-conversation'
+                    ? "Type your message... (Guest mode - not saved)"
+                    : "Type your message..."
+                }
+                disabled={isLoading || isInitializing}
+                className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-900 transition-colors"
+              />
+              <Button
+                type="submit"
+                disabled={isLoading || !input.trim() || isInitializing}
+                size="icon"
+                className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <Send className="w-5 h-5 sm:w-6 sm:h-6" />
+              </Button>
+            </div>
+          </form>
+
+          {/* Footer */}
+          <div className="mt-4 text-center text-xs sm:text-sm text-muted-foreground flex-shrink-0">
+            Powered by GPT-4.1-nano via GitHub Models
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
