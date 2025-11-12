@@ -12,6 +12,7 @@ interface AuthProps {
 export function Auth({ onAuthSuccess }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
@@ -23,16 +24,44 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        // First, sign up the user with organization name in metadata
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
+            data: {
+              organization_name: organizationName
+            }
           },
         });
 
-        if (error) throw error;
-        
+        if (authError) throw authError;
+
+        // After signup, if we have a session, create the organization
+        if (authData.session && authData.user) {
+          // Create the organization (now user is authenticated)
+          const { data: orgData, error: orgError } = await supabase
+            .from('organizations')
+            .insert([{ name: organizationName }])
+            .select()
+            .single();
+
+          if (orgError) throw orgError;
+
+          // Update the user's organization_id and set role to hr_admin
+          // (user who creates the org becomes the HR admin)
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({ 
+              organization_id: orgData.id,
+              role: 'hr_admin'
+            })
+            .eq('id', authData.user.id);
+
+          if (updateError) throw updateError;
+        }
+
         setMessage({
           type: 'success',
           text: 'Check your email to confirm your account!'
@@ -103,6 +132,19 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 className="h-12 text-base"
               />
             </div>
+            {isSignUp && (
+              <div className="space-y-2">
+                <Input
+                  type="text"
+                  placeholder="Organization Name"
+                  value={organizationName}
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="h-12 text-base"
+                />
+              </div>
+            )}
 
             {message && (
               <div className={`p-4 rounded-xl text-sm font-medium ${
@@ -138,6 +180,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setMessage(null);
+                  setOrganizationName('');
                 }}
                 className="text-primary hover:underline font-medium"
                 disabled={isLoading}

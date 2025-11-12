@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { uploadDocument, deleteDocument as deleteStorageDocument } from './storage';
+import { extractTextFromPDF, processDocumentForRAG } from './rag';
 
 export interface PolicyDocument {
   id: string;
@@ -115,6 +116,20 @@ export async function createPolicyDocument(
       .single();
 
     if (error) throw error;
+
+    // Process document for RAG if it's a PDF and published
+    if (file.type === 'application/pdf' && metadata.status === 'published') {
+      try {
+        console.log('📄 Extracting text from PDF for RAG processing...');
+        const documentText = await extractTextFromPDF(file);
+        await processDocumentForRAG(data.id, documentText);
+        console.log('✅ Document processed for RAG');
+      } catch (ragError) {
+        console.error('⚠️ Failed to process document for RAG:', ragError);
+        // Don't fail the upload if RAG processing fails
+      }
+    }
+
     return data;
   } catch (error) {
     console.error('Error creating policy document:', error);

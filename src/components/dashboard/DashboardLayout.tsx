@@ -2,6 +2,13 @@ import type { ReactNode } from 'react';
 import type { DashboardView } from './HRDashboard';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { supabase } from '@/lib/supabase';
 import {
   LayoutDashboard,
@@ -15,8 +22,9 @@ import {
   X,
   Shield,
   MessageCircle,
+  Building2,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -74,6 +82,65 @@ const navItems: NavItem[] = [
 export function DashboardLayout({ children, currentView, onViewChange, onNavigateToChat }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [currentUserOrgId, setCurrentUserOrgId] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadUserOrganization();
+  }, []);
+
+  const loadUserOrganization = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('No user found');
+        return;
+      }
+
+      console.log('Current user:', user.id);
+
+      // Get current user's organization
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', user.id)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+        throw userError;
+      }
+
+      console.log('User organization data:', userData);
+
+      setCurrentUserOrgId(userData.organization_id);
+      setSelectedOrgId(userData.organization_id || '');
+
+      // Load all organizations (for demo purposes - you may want to restrict this)
+      const { data: orgsData, error: orgsError } = await supabase
+        .from('organizations')
+        .select('id, name')
+        .order('name');
+
+      if (orgsError) {
+        console.error('Error fetching organizations:', orgsError);
+        throw orgsError;
+      }
+
+      console.log('Organizations loaded:', orgsData);
+
+      setOrganizations(orgsData || []);
+    } catch (error) {
+      console.error('Error loading organizations:', error);
+    }
+  };
+
+  const handleOrganizationChange = (orgId: string) => {
+    setSelectedOrgId(orgId);
+    // You can add additional logic here to filter data by organization
+    console.log('Selected organization:', orgId);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -137,6 +204,42 @@ export function DashboardLayout({ children, currentView, onViewChange, onNavigat
               </Button>
             </div>
           </div>
+
+          {/* Organization Selector */}
+          {(sidebarOpen || mobileMenuOpen) && (
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <label className="text-xs font-semibold text-muted-foreground mb-2 block">
+                ORGANIZATION
+              </label>
+              {organizations.length > 0 ? (
+                <Select value={selectedOrgId} onValueChange={handleOrganizationChange}>
+                  <SelectTrigger className="w-full">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <SelectValue placeholder="Select organization" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={org.id}>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <span>{org.name}</span>
+                          {org.id === currentUserOrgId && (
+                            <span className="text-xs text-primary">(Your org)</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-sm text-muted-foreground">
+                  No organizations found
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Navigation */}
           <ScrollArea className="flex-1 py-6">

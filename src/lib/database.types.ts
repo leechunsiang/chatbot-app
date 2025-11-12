@@ -9,6 +9,52 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      document_chunks: {
+        Row: {
+          id: string
+          document_id: string
+          content: string
+          chunk_index: number
+          embedding: number[] | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          document_id: string
+          content: string
+          chunk_index: number
+          embedding?: number[] | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          document_id?: string
+          content?: string
+          chunk_index?: number
+          embedding?: number[] | null
+          created_at?: string
+        }
+      }
+      organizations: {
+        Row: {
+          id: string
+          name: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       users: {
         Row: {
           id: string
@@ -17,6 +63,7 @@ export interface Database {
           avatar_url: string | null
           role: 'employee' | 'manager' | 'hr_admin'
           department: string | null
+          organization_id: string | null
           created_at: string
           updated_at: string
         }
@@ -27,6 +74,7 @@ export interface Database {
           avatar_url?: string | null
           role?: 'employee' | 'manager' | 'hr_admin'
           department?: string | null
+          organization_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -37,6 +85,7 @@ export interface Database {
           avatar_url?: string | null
           role?: 'employee' | 'manager' | 'hr_admin'
           department?: string | null
+          organization_id?: string | null
           created_at?: string
           updated_at?: string
         }

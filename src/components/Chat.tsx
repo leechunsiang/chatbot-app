@@ -6,6 +6,7 @@ import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut,
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
+import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -359,12 +360,60 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
         await updateConversationTitleFromFirstMessage(userMessageContent);
       }
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4.1-nano',
-        messages: [...messages, userMessage].map(msg => ({
+      // Search for relevant document chunks
+      let context = '';
+      try {
+        console.log('🔍 Searching for relevant policy documents...');
+        const relevantChunks = await searchDocumentChunks(userMessageContent, 0.7, 3);
+        
+        if (relevantChunks.length > 0) {
+          context = buildContextFromChunks(relevantChunks);
+          console.log(`✅ Found ${relevantChunks.length} relevant document chunks`);
+        } else {
+          console.log('ℹ️ No relevant documents found');
+        }
+      } catch (ragError) {
+        console.error('⚠️ Error searching documents:', ragError);
+        // Continue without context if RAG fails
+      }
+
+      // Build messages array with system prompt and context
+      const systemPrompt = context
+        ? `You are a helpful HR assistant that answers questions about company policies and benefits. 
+           
+You should:
+- Focus on HR-related topics like policies, benefits, leave, compensation, etc.
+- Use the provided policy documents to answer questions accurately
+- If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
+- Be professional, clear, and helpful
+
+Here are the relevant policy documents for context:
+
+${context}
+
+Base your answers on these documents when relevant.`
+        : `You are a helpful HR assistant that answers questions about company policies and benefits.
+
+You should:
+- Focus on HR-related topics like policies, benefits, leave, compensation, etc.
+- Let users know when you don't have specific policy information available
+- If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
+- Be professional, clear, and helpful
+
+Note: Currently, no policy documents are available. Encourage users to check with their HR department for specific policy information.`;
+
+      const messagesForAPI = [
+        { role: 'system' as const, content: systemPrompt },
+        ...messages.map(msg => ({
           role: msg.role,
           content: msg.content
         })),
+        { role: 'user' as const, content: userMessageContent }
+      ];
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: messagesForAPI,
         temperature: 0.7,
         max_tokens: 1000,
       });
