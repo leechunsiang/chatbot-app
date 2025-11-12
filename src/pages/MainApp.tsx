@@ -258,42 +258,44 @@ export function MainApp() {
   }
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 px-3 py-4 md:px-4 md:py-6 overflow-hidden">
-      {/* User Menu - Fixed to top right */}
-      <div className="fixed top-4 right-4 md:top-6 md:right-6 z-50">
-        <UserMenu
-          isAuthenticated={isAuthenticated}
-          userEmail={userEmail}
-          onAuthRequired={async () => {
-            console.log('🚪 onAuthRequired called - logging out');
-
-            try {
-              // Clear local state first
-              setIsAuthenticated(false);
-              setUserId(null);
-              setUserEmail('');
-              setUserRole('employee');
-
-              // Then sign out from Supabase
-              const { error } = await supabase.auth.signOut({ scope: 'global' });
-
-              if (error) {
-                console.error('❌ Logout error:', error);
-                // Even on error, keep the local state cleared
-              } else {
-                console.log('✅ Successfully logged out');
-              }
-            } catch (err) {
-              console.error('❌ Exception during logout:', err);
-              // Keep local state cleared even if signOut fails
-            }
-          }}
-        />
-      </div>
-      
+    <div className="h-screen w-screen bg-gray-50 dark:bg-gray-900 px-3 py-4 md:px-4 md:py-6 overflow-hidden">
       <div className="h-full w-full">
         {/* Tabs with Stacked Cards */}
-        <Tabs tabs={tabs} defaultActive={0} className="h-full" />
+        <Tabs
+          tabs={tabs}
+          defaultActive={0}
+          className="h-full"
+          actions={
+            <UserMenu
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+              onAuthRequired={async () => {
+                console.log('🚪 onAuthRequired called - logging out');
+
+                try {
+                  // Clear local state first
+                  setIsAuthenticated(false);
+                  setUserId(null);
+                  setUserEmail('');
+                  setUserRole('employee');
+
+                  // Then sign out from Supabase
+                  const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+                  if (error) {
+                    console.error('❌ Logout error:', error);
+                    // Even on error, keep the local state cleared
+                  } else {
+                    console.log('✅ Successfully logged out');
+                  }
+                } catch (err) {
+                  console.error('❌ Exception during logout:', err);
+                  // Keep local state cleared even if signOut fails
+                }
+              }}
+            />
+          }
+        />
       </div>
     </div>
   );

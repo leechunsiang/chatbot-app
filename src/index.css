@@ -1,8 +1,9 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&display=swap');
 
 :root {
   /* Dark mode colors - now default */
-  --background: 210 42% 9%;  /* #0F1827 */
+  --background: 0 0% 90%;  /* #E5E5E5 */
   --foreground: 213 31% 91%;
   --card: 210 42% 11%;
   --card-foreground: 213 31% 91%;
@@ -18,14 +19,14 @@
   --accent-foreground: 210 40% 98%;
   --destructive: 0 63% 31%;
   --destructive-foreground: 210 40% 98%;
-  --border: 216 20% 25%;
+  --border: 0 0% 0%;
   --input: 216 20% 25%;
   --ring: 216 20% 25%;
   --radius: 0.75rem;
   
   /* Chat-specific colors */
-  --chat-bg: 210 42% 9%;  /* #0F1827 */
-  --sidebar-bg: 215 20% 29%;  /* #364154 */
+  --chat-bg: 210 42% 20%;  /* Lighter shade */
+  --sidebar-bg: 0 0% 100%;  /* White */
   --message-user: 217 91% 60%;
   --message-assistant: 216 20% 25%;
 }
@@ -41,7 +42,7 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Fragment Mono', 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'ss01', 'ss02', 'cv01', 'cv03';

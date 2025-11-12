@@ -2,11 +2,45 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Boxes } from '@/components/ui/background-boxes';
 import { Send, Bot, User, AlertCircle, Plus, MessageSquare, Menu, X, Trash2 } from 'lucide-react';
 import OpenAI from 'openai';
-import { createConversation, createMessage, getUserConversations, getConversationMessages, deleteConversation } from '@/lib/database';
+import { createConversation, createMessage, getUserConversations, getConversationMessages, deleteConversation, updateConversationTitle, generateConversationTitle } from '@/lib/database';
 import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
 import type { Database } from '@/lib/database.types';
+
+interface TypewriterTextProps {
+  text: string;
+  speed?: number;
+  onComplete?: () => void;
+}
+
+function TypewriterText({ text, speed = 20, onComplete }: TypewriterTextProps) {
+  const [displayedText, setDisplayedText] = useState('');
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+
+      return () => clearTimeout(timeout);
+    } else if (currentIndex === text.length && onComplete) {
+      onComplete();
+    }
+  }, [currentIndex, text, speed, onComplete]);
+
+  return (
+    <span className="whitespace-pre-wrap break-words leading-relaxed">
+      {displayedText}
+      {currentIndex < text.length && (
+        <span className="inline-block w-1 h-4 bg-current ml-0.5 animate-pulse" />
+      )}
+    </span>
+  );
+}
 
 interface Message {
   role: 'user' | 'assistant';
@@ -30,6 +64,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
   const [isInitializing, setIsInitializing] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [typingMessageIndex, setTypingMessageIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize OpenAI client
@@ -116,6 +151,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
         id: msg.id
       }));
       setMessages(formattedMessages);
+      setTypingMessageIndex(null); // No typing animation for loaded messages
     } catch (err) {
       console.error('Error loading messages:', err);
       setMessages([]);
@@ -129,6 +165,7 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
       const newConv = await createConversation(userId, 'New Chat');
       setConversationId(newConv.id);
       setMessages([]);
+      setTypingMessageIndex(null);
       await loadConversations();
       setIsSidebarOpen(false);
     } catch (err) {
@@ -188,6 +225,18 @@ export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
       const convId = await ensureConversation();
       await saveMessage('user', userMessageContent, convId);
 
+      // Update conversation title with first message
+      if (messages.length === 0) {
+        try {
+          const newTitle = generateConversationTitle(userMessageContent);
+          await updateConversationTitle(convId, newTitle);
+          await loadConversations(); // Refresh conversation list to show new title
+        } catch (titleError) {
+          console.error('⚠️ Error updating conversation title:', titleError);
+          // Don't fail the message send if title update fails
+        }
+      }
+
       // Search for relevant document chunks
       let context = '';
       try {
@@ -230,7 +279,11 @@ ${context}`
         content: assistantContent
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev, assistantMessage];
+        setTypingMessageIndex(newMessages.length - 1); // Set the new message for typing animation
+        return newMessages;
+      });
       await saveMessage('assistant', assistantContent, convId);
     } catch (error) {
       console.error('Error in sendMessage:', error);
@@ -238,7 +291,11 @@ ${context}`
         role: 'assistant',
         content: 'Sorry, there was an error processing your request.'
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev, errorMessage];
+        setTypingMessageIndex(newMessages.length - 1);
+        return newMessages;
+      });
       setError('Failed to send message');
     } finally {
       setIsLoading(false);
@@ -246,12 +303,17 @@ ${context}`
   };
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/30 dark:from-slate-900 dark:via-blue-950/30 dark:to-purple-950/30">
+    <div className="relative flex h-full w-full overflow-hidden rounded-3xl bg-slate-50 dark:bg-slate-900">
+      {/* Background Boxes - Behind Everything */}
+      <div className="absolute inset-0 overflow-hidden z-0 opacity-30">
+        <Boxes />
+      </div>
+
       {/* Sidebar */}
       <div
         className={`${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-border/50 transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
+  } fixed inset-y-0 left-0 z-50 w-64 bg-slate-100/80 dark:bg-slate-800/90 backdrop-blur-sm border-r border-border/40 transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}
@@ -333,7 +395,7 @@ ${context}`
       )}
 
       {/* Main Content */}
-      <div className="flex flex-col h-full flex-1 overflow-hidden">
+      <div className="relative flex flex-col h-full flex-1 overflow-hidden z-20">
         <div className="flex flex-col h-full max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 overflow-hidden">
           {/* Mobile Menu Button */}
           <div className="flex items-center gap-4 mb-4 md:hidden">
@@ -364,8 +426,8 @@ ${context}`
           )}
 
           {/* Messages Area */}
-          <div className="flex-1 min-h-0 border border-border/50 rounded-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden shadow-lg mb-6 flex-shrink">
-            <ScrollArea className="h-full">
+          <div className="flex-1 min-h-0 border border-border/40 rounded-2xl bg-slate-100/80 dark:bg-slate-800/70 backdrop-blur-sm overflow-hidden shadow-lg mb-6 flex-shrink z-20">
+            <ScrollArea className="h-full bg-slate-50/70 dark:bg-slate-900/40">
               <div className="p-6 sm:p-8 space-y-6 min-h-full">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-20">
@@ -397,9 +459,19 @@ ${context}`
                             : 'bg-white dark:bg-slate-800 text-foreground border border-border/50'
                         }`}
                       >
-                        <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-                          {message.content}
-                        </p>
+                        {message.role === 'assistant' && typingMessageIndex === index ? (
+                          <p className="text-[15px] sm:text-base">
+                            <TypewriterText 
+                              text={message.content} 
+                              speed={20}
+                              onComplete={() => setTypingMessageIndex(null)}
+                            />
+                          </p>
+                        ) : (
+                          <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                            {message.content}
+                          </p>
+                        )}
                       </div>
                       {message.role === 'user' && (
                         <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-600 flex items-center justify-center shadow-md">
@@ -411,14 +483,17 @@ ${context}`
                 )}
                 {isLoading && (
                   <div className="flex gap-4 sm:gap-5 justify-start">
-                    <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
+                    <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md animate-pulse">
                       <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-800 border border-border/50 shadow-sm">
-                      <div className="flex gap-1.5">
-                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground font-medium">Thinking</span>
+                        <div className="flex gap-1.5">
+                          <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -430,7 +505,7 @@ ${context}`
 
           {/* Input Area */}
           <form onSubmit={sendMessage} className="flex-shrink-0">
-            <div className="flex gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-border/40 bg-slate-100/80 dark:bg-slate-800/90 backdrop-blur-sm shadow-md hover:shadow-lg transition-all focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:border-blue-500/50">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -446,13 +521,14 @@ ${context}`
                 placeholder={isInitializing ? "Initializing..." : "Type your message..."}
                 // Enable typing as soon as we have a userId even if conversation still creating
                 disabled={isLoading || (!userId)}
-                className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                className="flex-1 text-base h-10 sm:h-12 px-3 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <Button
                 type="submit"
                 disabled={isLoading || !input.trim() || !userId}
                 size="icon"
-                className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                variant="ghost"
+                className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 hover:bg-transparent text-blue-600 hover:text-purple-600 transition-colors"
                 title={!userId ? 'Waiting for user session' : !input.trim() ? 'Enter a message' : 'Send message'}
               >
                 <Send className="w-5 h-5 sm:w-6 sm:h-6" />

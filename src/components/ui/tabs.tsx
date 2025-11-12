@@ -125,9 +125,10 @@ interface TabsProps {
   tabs: TabItem[];
   defaultActive?: number;
   className?: string;
+  actions?: React.ReactNode;
 }
 
-export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => {
+export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsProps) => {
   const [activeTab, setActiveTab] = useState(defaultActive);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const [previousTab, setPreviousTab] = useState(defaultActive);
@@ -149,26 +150,35 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
     <div className={cn("w-full", className)}>
       {/* Tab Headers - Interactive Cards */}
       <div 
-        className="relative flex items-center gap-2 mb-6"
+        className="relative mb-6 flex flex-col items-end space-y-3"
         onMouseLeave={() => setHoveredTab(null)}
       >
-        {tabs.map((tab, index) => (
-          <motion.button
-            key={index}
-            onClick={() => handleTabChange(index)}
-            onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
-            className={cn(
-              "relative px-6 py-3 text-sm font-medium transition-all rounded-lg",
-              activeTab === index
-                ? 'text-white bg-gradient-to-r from-blue-500 to-purple-500 shadow-lg'
-                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
-            )}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {tab.label}
-          </motion.button>
-        ))}
+        {actions && (
+          <div className="flex justify-end z-[100] relative">
+            {actions}
+          </div>
+        )}
+
+        <div className="inline-flex flex-wrap items-center gap-2 self-start z-50 relative">
+          {tabs.map((tab, index) => (
+            <motion.button
+              key={index}
+              onClick={() => handleTabChange(index)}
+              onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
+              className={cn(
+                "relative px-6 py-3 text-sm font-medium transition-all rounded-lg",
+                activeTab === index
+                  ? 'text-white bg-blue-600 shadow-lg'
+                  : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+              )}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {tab.label}
+            </motion.button>
+          ))}
+        </div>
+
       </div>
 
       {/* Stacked Cards Container */}
@@ -296,9 +306,9 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '' }: TabsProps) => 
               }}
             >
               <div className={cn(
-                "w-full h-full rounded-3xl shadow-2xl border transition-colors bg-white dark:bg-gray-900",
+                "w-full h-full rounded-3xl shadow-sm border transition-colors bg-white dark:bg-gray-900",
                 isActive
-                  ? 'border-blue-500/50 shadow-blue-500/20'
+                  ? 'border-blue-500/50'
                   : 'border-gray-300 dark:border-gray-600'
               )}>
                 {tab.content}
