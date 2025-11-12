@@ -129,6 +129,40 @@ export async function searchSimilarMessages(
 // ==================== USER OPERATIONS ====================
 
 /**
+ * Ensure user record exists in public.users table
+ * Creates one if it doesn't exist (fallback if trigger didn't fire)
+ */
+export async function ensureUserExists(userId: string, email: string) {
+  try {
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!existingUser) {
+      console.log('Creating user record for:', userId);
+      const { error } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: email,
+          role: 'employee'
+        });
+
+      if (error) {
+        console.error('Error creating user record:', error);
+        throw error;
+      }
+      console.log('User record created successfully');
+    }
+  } catch (err) {
+    console.error('Error ensuring user exists:', err);
+    throw err;
+  }
+}
+
+/**
  * Get user profile
  */
 export async function getUserProfile(userId: string) {

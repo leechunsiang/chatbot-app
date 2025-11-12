@@ -3,6 +3,7 @@ import { Chat } from './components/Chat';
 import { Auth } from './components/Auth';
 import { HRDashboard } from './components/dashboard/HRDashboard';
 import { supabase } from './lib/supabase';
+import { ensureUserExists } from './lib/database';
 import './App.css';
 
 type UserRole = 'employee' | 'manager' | 'hr_admin';
@@ -14,14 +15,49 @@ function App() {
   const [currentView, setCurrentView] = useState<'chat' | 'dashboard'>('chat');
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const fetchUserRole = async (userId: string): Promise<UserRole> => {
+      try {
+        const { data: profile, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) {
+          console.log('⚠️ Error fetching user role:', error.message);
+          return 'employee';
+        }
+
+        if (profile?.role) {
+          console.log('✅ User role:', profile.role);
+          return profile.role as UserRole;
+        }
+
+        console.log('⚠️ No user profile found, defaulting to employee');
+        return 'employee';
+      } catch (err) {
+        console.error('❌ Error fetching user role:', err);
+        return 'employee';
+      }
+    };
+
     const initAuth = async () => {
       try {
         console.log('🔐 Initializing auth...');
+
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          console.warn('⚠️ Auth initialization timeout - continuing anyway');
+          setIsLoading(false);
+        }, 10000); // 10 second timeout
 
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
           console.error('❌ Session error:', sessionError);
+          clearTimeout(timeoutId);
           setIsLoading(false);
           return;
         }
@@ -32,30 +68,22 @@ function App() {
         // Fetch user role from profile if logged in
         if (session?.user) {
           console.log('👤 Fetching user role for:', session.user.id);
-          try {
-            const { data: profile, error } = await supabase
-              .from('users')
-              .select('role')
-              .eq('id', session.user.id)
-              .maybeSingle();
 
-            if (error) {
-              console.log('⚠️ Error fetching user role:', error.message);
-              setUserRole('employee');
-            } else if (profile?.role) {
-              console.log('✅ User role:', profile.role);
-              setUserRole(profile.role as UserRole);
-            } else {
-              console.log('⚠️ No user profile found, defaulting to employee');
-              setUserRole('employee');
-            }
+          // Ensure user record exists (fallback if trigger didn't fire)
+          try {
+            await ensureUserExists(session.user.id, session.user.email || '');
           } catch (err) {
-            console.error('❌ Error fetching user role:', err);
-            setUserRole('employee');
+            console.warn('Could not ensure user exists, continuing anyway:', err);
           }
+
+          const role = await fetchUserRole(session.user.id);
+          setUserRole(role);
         }
+
+        clearTimeout(timeoutId);
       } catch (err) {
         console.error('❌ Auth initialization error:', err);
+        clearTimeout(timeoutId);
       } finally {
         console.log('✅ Auth initialization complete');
         setIsLoading(false);
@@ -64,34 +92,33 @@ function App() {
 
     initAuth();
 
-    // Listen for auth changes
+    // Listen for auth changes - use non-async callback to avoid deadlock
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('🔄 Auth state changed:', _event);
       setIsAuthenticated(!!session);
 
-      // Fetch user role when auth state changes
+      // Fetch user role in async block to avoid deadlock
       if (session?.user) {
-        try {
-          const { data: profile, error } = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (!error && profile?.role) {
-            setUserRole(profile.role as UserRole);
-          } else {
+        (async () => {
+          try {
+            const role = await fetchUserRole(session.user.id);
+            setUserRole(role);
+          } catch (err) {
+            console.error('Error fetching user role:', err);
             setUserRole('employee');
           }
-        } catch (err) {
-          console.error('Error fetching user role:', err);
-          setUserRole('employee');
-        }
+        })();
+      } else {
+        setUserRole('employee');
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (isLoading) {
