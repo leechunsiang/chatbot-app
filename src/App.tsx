@@ -10,7 +10,7 @@ type UserRole = 'employee' | 'manager' | 'hr_admin';
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [userRole, setUserRole] = useState<UserRole>('employee');
+  const [_userRole, setUserRole] = useState<UserRole>('employee');
   const [currentView, setCurrentView] = useState<'chat' | 'dashboard'>('chat');
 
   useEffect(() => {

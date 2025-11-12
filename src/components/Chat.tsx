@@ -65,6 +65,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
         console.log('✅ Chat session loaded for user:', session.user.id);
         setUserId(session.user.id);
+        console.log('📊 State after auth:', { userId: session.user.id });
 
         // Try to ensure user exists, but don't fail if table doesn't exist
         try {
@@ -88,20 +89,26 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
           if (conversationError) {
             console.warn('⚠️ Could not load conversations:', conversationError.message);
+            throw new Error(`Database error: ${conversationError.message}`);
           } else if (conversations && conversations.length > 0) {
             setConversationId(conversations[0].id);
             await loadMessages(conversations[0].id);
-            console.log('✅ Loaded existing conversation');
+            console.log('✅ Loaded existing conversation:', conversations[0].id);
+            console.log('📊 State after loading:', { conversationId: conversations[0].id, userId: session.user.id });
           } else {
             const newConversation = await createConversation(session.user.id, 'New Chat');
             setConversationId(newConversation.id);
             await loadConversations(session.user.id);
-            console.log('✅ Created new conversation');
+            console.log('✅ Created new conversation:', newConversation.id);
+            console.log('📊 State after creation:', { conversationId: newConversation.id, userId: session.user.id });
           }
         } catch (convErr) {
-          console.warn('⚠️ Could not initialize conversations (table may not exist):', convErr);
-          // Set error but allow chat to load anyway
-          setError('Database not fully configured. Some features may be limited. Run migrations from SUPABASE_SETUP.md');
+          console.error('❌ Could not initialize conversations (database may not be set up):', convErr);
+          // Set error and don't allow chat without proper setup
+          const errorMessage = convErr instanceof Error ? convErr.message : 'Unknown error';
+          setError(`Database error: ${errorMessage}. Please ensure migrations are run. See SUPABASE_SETUP.md for instructions.`);
+          // Don't proceed - user needs to fix database setup
+          throw convErr;
         }
       } catch (err) {
         console.error('❌ Chat initialization error:', err);
@@ -321,7 +328,29 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!input.trim() || isLoading || !conversationId || !userId) return;
+    if (!input.trim()) {
+      console.warn('⚠️ Cannot send: No input text');
+      return;
+    }
+
+    if (isLoading) {
+      console.warn('⚠️ Cannot send: Already loading');
+      return;
+    }
+
+    if (!conversationId) {
+      console.error('❌ Cannot send: No conversation ID');
+      setError('Chat not initialized properly. Please refresh the page or check database setup.');
+      return;
+    }
+
+    if (!userId) {
+      console.error('❌ Cannot send: No user ID');
+      setError('User not authenticated. Please sign in again.');
+      return;
+    }
+
+    console.log('📤 Sending message...', { conversationId, userId, messageLength: input.length });
 
     const userMessageContent = input;
     const userMessage: Message = { role: 'user', content: userMessageContent };
@@ -617,15 +646,26 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message..."
-                disabled={isLoading}
+                placeholder={
+                  !conversationId || !userId
+                    ? "Chat not ready..."
+                    : "Type your message..."
+                }
+                disabled={isLoading || !conversationId || !userId}
                 className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-card/50 backdrop-blur-sm focus:bg-card transition-colors"
               />
-              <Button 
-                type="submit" 
-                disabled={isLoading || !input.trim()}
+              <Button
+                type="submit"
+                disabled={isLoading || !input.trim() || !conversationId || !userId}
                 size="icon"
                 className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+                title={
+                  !conversationId || !userId
+                    ? "Chat not ready - check console for errors"
+                    : !input.trim()
+                    ? "Enter a message first"
+                    : "Send message"
+                }
               >
                 <Send className="w-5 h-5 sm:w-6 sm:h-6" />
               </Button>
