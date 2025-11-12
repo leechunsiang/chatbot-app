@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Search, FileText, Download, Loader2, X, AlertCircle, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Upload, Search, FileText, Download, Loader2, X, AlertCircle, RefreshCw, CheckCircle, XCircle, Clock, Database } from 'lucide-react';
 import { getPolicyDocuments, createPolicyDocument, deletePolicyDocument, reprocessDocument, type PolicyDocument } from '@/lib/documents';
 import { getDocumentPublicUrl } from '@/lib/storage';
 import { formatDistanceToNow } from 'date-fns';
+import { getRAGDiagnostics, testRAGSearch } from '@/lib/rag';
 
 export function DocumentManagement() {
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
@@ -23,6 +24,10 @@ export function DocumentManagement() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [uploadCategory, setUploadCategory] = useState('');
   const [uploadStatus, setUploadStatus] = useState<'draft' | 'published'>('draft');
+
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<any>(null);
+  const [isLoadingDiagnostics, setIsLoadingDiagnostics] = useState(false);
 
   useEffect(() => {
     loadDocuments();
@@ -177,6 +182,36 @@ export function DocumentManagement() {
     return `${mb.toFixed(2)} MB`;
   };
 
+  const loadDiagnostics = async () => {
+    try {
+      setIsLoadingDiagnostics(true);
+      const data = await getRAGDiagnostics();
+      setDiagnostics(data);
+      setShowDiagnostics(true);
+    } catch (err) {
+      console.error('Error loading diagnostics:', err);
+      setError('Failed to load RAG diagnostics');
+    } finally {
+      setIsLoadingDiagnostics(false);
+    }
+  };
+
+  const handleTestSearch = async () => {
+    try {
+      setError(null);
+      const result = await testRAGSearch('company leave policy');
+      console.log('RAG Test Search Result:', result);
+      if (result.success) {
+        alert(`Test successful! Found ${result.chunksFound} document chunks. Check console for details.`);
+      } else {
+        alert(`Test failed: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error testing RAG search:', err);
+      setError('Failed to test RAG search');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -186,7 +221,15 @@ export function DocumentManagement() {
             Upload and manage policy documents for the chatbot
           </p>
         </div>
-        <div>
+        <div className="flex gap-2">
+          <Button onClick={loadDiagnostics} variant="outline" className="gap-2" disabled={isLoadingDiagnostics}>
+            {isLoadingDiagnostics ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4" />
+            )}
+            RAG Diagnostics
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -303,6 +346,80 @@ export function DocumentManagement() {
                 )}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* RAG Diagnostics */}
+      {showDiagnostics && diagnostics && (
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                RAG System Diagnostics
+              </span>
+              <Button variant="ghost" size="icon" onClick={() => setShowDiagnostics(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+            <CardDescription>
+              Current status of the Retrieval-Augmented Generation system
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">Total Documents</p>
+                <p className="text-2xl font-bold">{diagnostics.totalDocuments}</p>
+              </div>
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">Published</p>
+                <p className="text-2xl font-bold text-green-600">{diagnostics.publishedDocuments}</p>
+              </div>
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">With Embeddings</p>
+                <p className="text-2xl font-bold text-blue-600">{diagnostics.documentsWithChunks}</p>
+              </div>
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">Total Chunks</p>
+                <p className="text-2xl font-bold">{diagnostics.totalChunks}</p>
+              </div>
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">Avg Chunks/Doc</p>
+                <p className="text-2xl font-bold">{diagnostics.avgChunksPerDocument}</p>
+              </div>
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-lg border">
+                <p className="text-sm text-muted-foreground">Search Status</p>
+                <p className="text-lg font-bold">
+                  {diagnostics.totalChunks > 0 ? (
+                    <span className="text-green-600">Ready</span>
+                  ) : (
+                    <span className="text-red-600">No Data</span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="pt-2 border-t">
+              <Button onClick={handleTestSearch} variant="outline" className="w-full">
+                <Search className="h-4 w-4 mr-2" />
+                Test Search with Sample Query
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                This will search for "company leave policy" and log results to console
+              </p>
+            </div>
+            {diagnostics.totalChunks === 0 && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-400 mb-2">No embeddings found</p>
+                <ul className="text-sm text-amber-700 dark:text-amber-500 space-y-1 list-disc list-inside">
+                  <li>Upload PDF documents and set status to "Published"</li>
+                  <li>Wait for processing to complete (check Processing Status badge)</li>
+                  <li>Verify OpenAI API key is configured in environment variables</li>
+                  <li>Check browser console for processing errors</li>
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -103,25 +103,43 @@ export async function processDocumentForRAG(
  */
 export async function searchDocumentChunks(
   query: string,
-  matchThreshold: number = 0.7,
+  matchThreshold: number = 0.5,
   matchCount: number = 5
 ): Promise<DocumentChunk[]> {
   try {
-    // Create embedding for the query
-    const queryEmbedding = await createEmbedding(query);
+    console.log('🔍 RAG Search - Query:', query);
+    console.log('🔍 RAG Search - Threshold:', matchThreshold, 'Count:', matchCount);
 
-    // Search for similar chunks using the Postgres function
+    const queryEmbedding = await createEmbedding(query);
+    console.log('✅ RAG Search - Query embedding created:', queryEmbedding.length, 'dimensions');
+
     const { data, error } = await supabase.rpc('match_document_chunks', {
       query_embedding: queryEmbedding,
       match_threshold: matchThreshold,
       match_count: matchCount,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ RAG Search - RPC error:', error);
+      throw error;
+    }
+
+    console.log(`✅ RAG Search - Found ${data?.length || 0} matching chunks`);
+
+    if (data && data.length > 0) {
+      data.forEach((chunk: any, idx: number) => {
+        console.log(`  📄 Chunk ${idx + 1}: Similarity ${(chunk.similarity * 100).toFixed(1)}%, Length: ${chunk.content?.length || 0} chars`);
+      });
+    } else {
+      console.warn('⚠️ RAG Search - No matching chunks found. Possible issues:');
+      console.warn('  - No published documents with embeddings in database');
+      console.warn('  - Similarity threshold too high');
+      console.warn('  - Query not semantically similar to document content');
+    }
 
     return data || [];
   } catch (error) {
-    console.error('Error searching document chunks:', error);
+    console.error('❌ RAG Search - Error:', error);
     throw error;
   }
 }
@@ -205,8 +223,78 @@ export function buildContextFromChunks(chunks: DocumentChunk[]): string {
   if (chunks.length === 0) return '';
 
   const context = chunks
-    .map((chunk, index) => `[Document ${index + 1}]\n${chunk.content}`)
+    .map((chunk, index) => {
+      const similarityPercent = chunk.similarity ? `(${(chunk.similarity * 100).toFixed(1)}% match)` : '';
+      return `[Document ${index + 1}] ${similarityPercent}\n${chunk.content}`;
+    })
     .join('\n\n---\n\n');
 
   return context;
+}
+
+/**
+ * Get RAG system diagnostics
+ */
+export async function getRAGDiagnostics(): Promise<{
+  totalChunks: number;
+  totalDocuments: number;
+  publishedDocuments: number;
+  documentsWithChunks: number;
+  avgChunksPerDocument: number;
+}> {
+  try {
+    const { data: chunks, error: chunksError } = await supabase
+      .from('document_chunks')
+      .select('document_id');
+
+    if (chunksError) throw chunksError;
+
+    const { data: docs, error: docsError } = await supabase
+      .from('policy_documents')
+      .select('id, status');
+
+    if (docsError) throw docsError;
+
+    const uniqueDocumentsWithChunks = new Set(chunks?.map(c => c.document_id) || []).size;
+    const publishedDocs = docs?.filter(d => d.status === 'published').length || 0;
+
+    return {
+      totalChunks: chunks?.length || 0,
+      totalDocuments: docs?.length || 0,
+      publishedDocuments: publishedDocs,
+      documentsWithChunks: uniqueDocumentsWithChunks,
+      avgChunksPerDocument: uniqueDocumentsWithChunks > 0
+        ? Math.round((chunks?.length || 0) / uniqueDocumentsWithChunks)
+        : 0,
+    };
+  } catch (error) {
+    console.error('Error getting RAG diagnostics:', error);
+    throw error;
+  }
+}
+
+/**
+ * Test RAG search with a sample query
+ */
+export async function testRAGSearch(query: string = 'company policy'): Promise<{
+  success: boolean;
+  chunksFound: number;
+  chunks: DocumentChunk[];
+  error?: string;
+}> {
+  try {
+    const chunks = await searchDocumentChunks(query, 0.3, 10);
+    return {
+      success: true,
+      chunksFound: chunks.length,
+      chunks,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      chunksFound: 0,
+      chunks: [],
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
 }

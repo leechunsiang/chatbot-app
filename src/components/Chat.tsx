@@ -364,13 +364,15 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
       let context = '';
       try {
         console.log('🔍 Searching for relevant policy documents...');
-        const relevantChunks = await searchDocumentChunks(userMessageContent, 0.7, 3);
-        
+        const relevantChunks = await searchDocumentChunks(userMessageContent, 0.5, 5);
+
         if (relevantChunks.length > 0) {
           context = buildContextFromChunks(relevantChunks);
           console.log(`✅ Found ${relevantChunks.length} relevant document chunks`);
+          console.log('📚 Document chunks will be used to answer the question');
         } else {
           console.log('ℹ️ No relevant documents found');
+          console.log('💡 Tip: Make sure documents are uploaded, published, and processed successfully');
         }
       } catch (ragError) {
         console.error('⚠️ Error searching documents:', ragError);
