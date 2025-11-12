@@ -14,6 +14,7 @@ export interface PolicyDocument {
   tags: string[];
   version: number;
   status: 'draft' | 'published' | 'archived';
+  is_enabled: boolean;
   uploaded_by: string | null;
   created_at: string;
   updated_at: string;
@@ -266,6 +267,25 @@ export async function reprocessDocument(documentId: string): Promise<void> {
     await processDocumentAsync(documentId, document.file_path);
   } catch (error) {
     console.error('Error reprocessing document:', error);
+    throw error;
+  }
+}
+
+/**
+ * Toggle document enabled status for RAG
+ */
+export async function toggleDocumentEnabled(documentId: string, isEnabled: boolean): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('policy_documents')
+      .update({ is_enabled: isEnabled })
+      .eq('id', documentId);
+
+    if (error) throw error;
+
+    console.log(`✅ Document ${isEnabled ? 'enabled' : 'disabled'} for RAG`);
+  } catch (error) {
+    console.error('Error toggling document enabled status:', error);
     throw error;
   }
 }

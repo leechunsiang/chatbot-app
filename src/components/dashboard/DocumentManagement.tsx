@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Upload, Search, FileText, Download, Loader2, X, AlertCircle, RefreshCw, CheckCircle, XCircle, Clock, Database } from 'lucide-react';
-import { getPolicyDocuments, createPolicyDocument, deletePolicyDocument, reprocessDocument, type PolicyDocument } from '@/lib/documents';
+import { Upload, Search, FileText, Download, Loader2, X, AlertCircle, RefreshCw, CheckCircle, XCircle, Clock, Database, Power, PowerOff } from 'lucide-react';
+import { getPolicyDocuments, createPolicyDocument, deletePolicyDocument, reprocessDocument, toggleDocumentEnabled, type PolicyDocument } from '@/lib/documents';
 import { getDocumentPublicUrl } from '@/lib/storage';
 import { formatDistanceToNow } from 'date-fns';
 import { getRAGDiagnostics, testRAGSearch } from '@/lib/rag';
@@ -146,6 +146,21 @@ export function DocumentManagement() {
     } catch (err) {
       console.error('Error reprocessing document:', err);
       setError('Failed to reprocess document');
+    }
+  };
+
+  const handleToggleEnabled = async (doc: PolicyDocument) => {
+    const action = doc.is_enabled ? 'disable' : 'enable';
+    
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} "${doc.title}" for RAG? ${doc.is_enabled ? 'This document will NOT be used in chatbot responses.' : 'This document will be available for chatbot responses.'}`)) return;
+
+    try {
+      setError(null);
+      await toggleDocumentEnabled(doc.id, !doc.is_enabled);
+      await loadDocuments();
+    } catch (err) {
+      console.error('Error toggling document enabled status:', err);
+      setError(`Failed to ${action} document`);
     }
   };
 
@@ -513,6 +528,18 @@ export function DocumentManagement() {
                       {doc.status}
                     </span>
                     {getProcessingStatusBadge(doc)}
+                    {/* Enable/Disable Toggle for Published Documents */}
+                    {doc.status === 'published' && (
+                      <Button
+                        variant={doc.is_enabled ? "outline" : "ghost"}
+                        size="icon"
+                        onClick={() => handleToggleEnabled(doc)}
+                        title={doc.is_enabled ? 'Disable for RAG (document will not be used in chatbot responses)' : 'Enable for RAG (document will be used in chatbot responses)'}
+                        className={doc.is_enabled ? 'border-green-500 text-green-600 hover:bg-green-50 dark:border-green-600 dark:text-green-500 dark:hover:bg-green-950' : 'text-gray-400 hover:text-gray-600 dark:text-gray-600 dark:hover:text-gray-400'}
+                      >
+                        {doc.is_enabled ? <Power className="h-4 w-4" /> : <PowerOff className="h-4 w-4" />}
+                      </Button>
+                    )}
                     {doc.file_type === 'application/pdf' && (doc.processing_status === 'failed' || doc.processing_status === 'pending') && (
                       <Button
                         variant="ghost"
