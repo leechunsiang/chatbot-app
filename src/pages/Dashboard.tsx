@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp, Plus } from 'lucide-react';
@@ -12,11 +12,16 @@ export function Dashboard() {
   const [organizationName, setOrganizationName] = useState('');
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [userId, setUserId] = useState<string>('');
+  const [userOrganizations, setUserOrganizations] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [userOrganization, setUserOrganization] = useState<string | null>(null);
   const [userOrganizationId, setUserOrganizationId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [showOrgDropdown, setShowOrgDropdown] = useState(false);
   const [showManageUsersModal, setShowManageUsersModal] = useState(false);
+  const orgDropdownRef = useRef<HTMLDivElement>(null);
   const [searchEmail, setSearchEmail] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null; organization_id: string | null }>>([]);
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null; isInOrganization?: boolean }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; name: string } | null>(null);
@@ -24,6 +29,9 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<'add' | 'view'>('add');
   const [organizationMembers, setOrganizationMembers] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null; role: string }>>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [userToRemove, setUserToRemove] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -44,16 +52,27 @@ export function Dashboard() {
         setUserEmail(session.user.email || '');
         setUserId(session.user.id);
 
-        // Fetch user's organization
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('organization_id, organizations(name)')
-          .eq('id', session.user.id)
-          .single();
+        // Fetch all organizations user belongs to
+        const { data: orgMemberships, error: orgError } = await supabase
+          .from('organization_users')
+          .select('organization_id, role, organizations(id, name)')
+          .eq('user_id', session.user.id);
 
-        if (!userError && userData?.organization_id && userData.organizations) {
-          setUserOrganization((userData.organizations as any).name);
-          setUserOrganizationId(userData.organization_id);
+        if (!orgError && orgMemberships && orgMemberships.length > 0) {
+          const orgs = orgMemberships.map(membership => ({
+            id: membership.organization_id,
+            name: (membership.organizations as any).name,
+            role: membership.role
+          }));
+          
+          setUserOrganizations(orgs);
+          
+          // Set the first organization as selected by default
+          const firstOrg = orgs[0];
+          setSelectedOrgId(firstOrg.id);
+          setUserOrganization(firstOrg.name);
+          setUserOrganizationId(firstOrg.id);
+          setUserRole(firstOrg.role);
         }
 
         setIsLoading(false);
@@ -80,6 +99,30 @@ export function Dashboard() {
     };
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(event.target as Node)) {
+        setShowOrgDropdown(false);
+      }
+    };
+
+    if (showOrgDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showOrgDropdown]);
+
+  // Auto-dismiss toast after 5 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -96,7 +139,7 @@ export function Dashboard() {
 
   const handleCreateOrganization = async () => {
     if (!organizationName.trim()) {
-      alert('Please enter an organization name');
+      setToast({ message: 'Please enter an organization name', type: 'error' });
       return;
     }
 
@@ -111,22 +154,31 @@ export function Dashboard() {
 
       if (orgError) throw orgError;
 
-      // Update the user to set them as owner of this organization
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ organization_id: orgData.id })
-        .eq('id', userId);
+      // Add the user to organization_users as manager
+      const { error: memberError } = await supabase
+        .from('organization_users')
+        .insert([{ 
+          user_id: userId,
+          organization_id: orgData.id,
+          role: 'manager'
+        }]);
 
-      if (userError) throw userError;
+      if (memberError) throw memberError;
 
-      alert(`Organization "${organizationName}" created successfully!`);
+      setToast({ message: `Organization "${organizationName}" created successfully!`, type: 'success' });
+      
+      // Add new organization to the list
+      const newOrg = { id: orgData.id, name: organizationName, role: 'manager' as const };
+      setUserOrganizations(prev => [...prev, newOrg]);
+      setSelectedOrgId(orgData.id);
       setUserOrganization(organizationName);
       setUserOrganizationId(orgData.id);
+      setUserRole('manager');
       setShowCreateOrgModal(false);
       setOrganizationName('');
     } catch (error: any) {
       console.error('Error creating organization:', error);
-      alert(`Failed to create organization: ${error.message}`);
+      setToast({ message: `Failed to create organization: ${error.message}`, type: 'error' });
     } finally {
       setIsCreatingOrg(false);
     }
@@ -144,13 +196,31 @@ export function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, first_name, last_name, organization_id')
+        .select('id, email, first_name, last_name')
         .ilike('email', `%${email}%`)
         .neq('id', userId)
         .limit(10);
 
       if (error) throw error;
-      setSearchResults(data || []);
+
+      // Check which users are already in the organization
+      if (data && data.length > 0 && userOrganizationId) {
+        const userIds = data.map(u => u.id);
+        const { data: memberships } = await supabase
+          .from('organization_users')
+          .select('user_id')
+          .eq('organization_id', userOrganizationId)
+          .in('user_id', userIds);
+
+        const memberIds = new Set(memberships?.map(m => m.user_id) || []);
+        const resultsWithStatus = data.map(user => ({
+          ...user,
+          isInOrganization: memberIds.has(user.id)
+        }));
+        setSearchResults(resultsWithStatus);
+      } else {
+        setSearchResults(data || []);
+      }
     } catch (error: any) {
       console.error('Error searching users:', error);
     } finally {
@@ -160,7 +230,7 @@ export function Dashboard() {
 
   const handleAddUserToOrganization = async () => {
     if (!userOrganizationId || !selectedUser) {
-      alert('No organization or user selected');
+      setToast({ message: 'No organization or user selected', type: 'error' });
       return;
     }
 
@@ -172,38 +242,33 @@ export function Dashboard() {
         role: selectedRole
       });
 
-      const { data, error } = await supabase
-        .from('users')
-        .update({ 
+      // Add user to organization_users table
+      const { error: memberError } = await supabase
+        .from('organization_users')
+        .insert([{
+          user_id: selectedUser.id,
           organization_id: userOrganizationId,
-          role: selectedRole 
-        })
-        .eq('id', selectedUser.id)
-        .select();
+          role: selectedRole
+        }]);
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
+      if (memberError) throw memberError;
 
-      console.log('Update successful:', data);
+      console.log('User added successfully');
 
       // Show success feedback
       const roleName = selectedRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-      alert(`✅ Successfully added ${selectedUser.name} to your organization as ${roleName}!`);
+      setToast({ message: `Successfully added ${selectedUser.name} to your organization as ${roleName}!`, type: 'success' });
       
       setSearchEmail('');
       setSearchResults([]);
       setSelectedUser(null);
       setSelectedRole('employee');
       
-      // Refresh members list if on view tab
-      if (activeTab === 'view') {
-        fetchOrganizationMembers();
-      }
+      // Always refresh members list after adding
+      await fetchOrganizationMembers();
     } catch (error: any) {
       console.error('Error adding user:', error);
-      alert(`❌ Failed to add user: ${error.message || 'Unknown error'}`);
+      setToast({ message: `Failed to add user: ${error.message || 'Unknown error'}`, type: 'error' });
     } finally {
       setIsAddingUser(false);
     }
@@ -214,62 +279,124 @@ export function Dashboard() {
 
     setIsLoadingMembers(true);
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email, first_name, last_name, role')
+      console.log('Fetching members for organization:', userOrganizationId);
+      
+      // First, get all organization memberships
+      const { data: memberships, error: memberError } = await supabase
+        .from('organization_users')
+        .select('user_id, role')
         .eq('organization_id', userOrganizationId)
-        .neq('id', userId)
-        .order('first_name', { ascending: true });
+        .neq('user_id', userId);
 
-      if (error) throw error;
-      setOrganizationMembers(data || []);
+      if (memberError) {
+        console.error('Error fetching memberships:', memberError);
+        throw memberError;
+      }
+
+      console.log('Fetched memberships:', memberships);
+
+      if (!memberships || memberships.length === 0) {
+        setOrganizationMembers([]);
+        return;
+      }
+
+      // Then get user details for all members
+      const userIds = memberships.map(m => m.user_id);
+      const { data: users, error: userError } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name')
+        .in('id', userIds);
+
+      if (userError) {
+        console.error('Error fetching user details:', userError);
+        throw userError;
+      }
+
+      console.log('Fetched users:', users);
+
+      // Combine the data
+      const members = memberships.map(membership => {
+        const user = users?.find(u => u.id === membership.user_id);
+        return {
+          id: membership.user_id,
+          email: user?.email || '',
+          first_name: user?.first_name || null,
+          last_name: user?.last_name || null,
+          role: membership.role
+        };
+      });
+
+      console.log('Processed members:', members);
+      setOrganizationMembers(members);
     } catch (error: any) {
       console.error('Error fetching members:', error);
-      alert(`❌ Failed to load members: ${error.message}`);
+      setToast({ message: `Failed to load members: ${error.message}`, type: 'error' });
     } finally {
       setIsLoadingMembers(false);
     }
   };
 
-  const handleRemoveUser = async (memberId: string, memberName: string) => {
-    if (!confirm(`Are you sure you want to remove ${memberName} from your organization?`)) {
-      return;
-    }
+  const handleRemoveUser = async (memberUserId: string, memberName: string) => {
+    setUserToRemove({ id: memberUserId, name: memberName });
+    setShowConfirmModal(true);
+  };
+
+  const confirmRemoveUser = async () => {
+    if (!userToRemove) return;
 
     try {
+      // Remove from organization_users
       const { error } = await supabase
-        .from('users')
-        .update({ 
-          organization_id: null,
-          role: 'employee'
-        })
-        .eq('id', memberId);
+        .from('organization_users')
+        .delete()
+        .eq('user_id', userToRemove.id)
+        .eq('organization_id', userOrganizationId);
 
       if (error) throw error;
 
-      alert(`✅ Successfully removed ${memberName} from your organization!`);
+      setToast({ message: 'Successfully removed user from your organization!', type: 'success' });
+      setShowConfirmModal(false);
+      setUserToRemove(null);
       fetchOrganizationMembers();
     } catch (error: any) {
       console.error('Error removing user:', error);
-      alert(`❌ Failed to remove user: ${error.message}`);
+      setToast({ message: `Failed to remove user: ${error.message}`, type: 'error' });
     }
   };
 
-  const handleUpdateUserRole = async (memberId: string, memberName: string, newRole: string) => {
+  const handleUpdateUserRole = async (memberUserId: string, memberName: string, newRole: string) => {
     try {
+      // Update role in organization_users
       const { error } = await supabase
-        .from('users')
+        .from('organization_users')
         .update({ role: newRole })
-        .eq('id', memberId);
+        .eq('user_id', memberUserId)
+        .eq('organization_id', userOrganizationId);
 
       if (error) throw error;
 
       const roleName = newRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-      alert(`✅ Successfully updated ${memberName}'s role to ${roleName}!`);
+      setToast({ message: `Successfully updated ${memberName}'s role to ${roleName}!`, type: 'success' });
       fetchOrganizationMembers();
     } catch (error: any) {
       console.error('Error updating role:', error);
-      alert(`❌ Failed to update role: ${error.message}`);
+      setToast({ message: `Failed to update role: ${error.message}`, type: 'error' });
+    }
+  };
+
+  const handleSwitchOrganization = (orgId: string) => {
+    const org = userOrganizations.find(o => o.id === orgId);
+    if (org) {
+      setSelectedOrgId(org.id);
+      setUserOrganization(org.name);
+      setUserOrganizationId(org.id);
+      setUserRole(org.role);
+      setShowOrgDropdown(false);
+      
+      // Refresh members if manage users modal is open
+      if (showManageUsersModal) {
+        fetchOrganizationMembers();
+      }
     }
   };
 
@@ -295,10 +422,44 @@ export function Dashboard() {
               HR Dashboard
             </h1>
             {userOrganization && (
-              <div className="flex items-center gap-2 bg-gradient-to-r from-purple-400 to-pink-400 text-black font-bold border-3 border-black rounded-lg px-6 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
-                <span className="text-lg">🏢</span>
-                <span>{userOrganization}</span>
-              </div>
+              <>
+                {userOrganizations.length > 1 ? (
+                  <div ref={orgDropdownRef} className="relative">
+                    <button
+                      onClick={() => setShowOrgDropdown(!showOrgDropdown)}
+                      className="text-xl font-bold text-green-600 hover:text-green-700 transition-colors flex items-center gap-1"
+                    >
+                      {userOrganization}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {showOrgDropdown && (
+                      <div className="absolute top-full left-0 mt-2 bg-white border-3 border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] min-w-[200px] z-50">
+                        {userOrganizations.map(org => (
+                          <button
+                            key={org.id}
+                            onClick={() => handleSwitchOrganization(org.id)}
+                            className={`w-full text-left px-4 py-3 font-bold transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                              org.id === selectedOrgId 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'text-black hover:bg-gray-100'
+                            }`}
+                          >
+                            <div>{org.name}</div>
+                            <div className="text-xs text-gray-600 capitalize">{org.role.replace('_', ' ')}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xl font-bold text-green-600">
+                    {userOrganization}
+                  </span>
+                )}
+              </>
             )}
           </div>
           
@@ -324,9 +485,13 @@ export function Dashboard() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40">
           <div className="bg-white border-4 border-black rounded-xl p-12 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-lg text-center">
             <div className="text-6xl mb-6">🏢</div>
-            <h2 className="text-3xl font-black text-black mb-4">Create an Organization</h2>
+            <h2 className="text-3xl font-black text-black mb-4">
+              {userRole === 'employee' ? 'Start Your Own Organization' : 'Create an Organization'}
+            </h2>
             <p className="text-lg font-bold text-black/70 mb-8">
-              You need to create or join an organization to access the HR Dashboard
+              {userRole === 'employee' 
+                ? 'Create your own organization to unlock HR management features and build your team!'
+                : 'You need to create or join an organization to access the HR Dashboard'}
             </p>
             <Button
               onClick={() => setShowCreateOrgModal(true)}
@@ -344,9 +509,38 @@ export function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8 bg-gradient-to-r from-cyan-400 to-blue-500 border-4 border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
           <h2 className="text-4xl font-black text-white mb-2">Welcome Back! 👋</h2>
-          <p className="text-xl text-white font-bold">Here's what's happening with your HR operations</p>
+          <p className="text-xl text-white font-bold">
+            {userRole === 'employee' 
+              ? `You're part of ${userOrganization}` 
+              : "Here's what's happening with your HR operations"}
+          </p>
         </div>
 
+        {/* Employee View - No Management Access */}
+        {userRole === 'employee' && (
+          <div className="bg-white border-4 border-black rounded-xl p-12 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] text-center">
+            <div className="text-6xl mb-6">👤</div>
+            <h2 className="text-3xl font-black text-black mb-4">Employee Access</h2>
+            <p className="text-lg font-bold text-black/70 mb-6">
+              You're currently an employee of <span className="text-cyan-600">{userOrganization}</span>.
+              Employees don't have access to management features.
+            </p>
+            <p className="text-md font-bold text-black/60 mb-8">
+              Want to manage your own team? Create your own organization!
+            </p>
+            <Button
+              onClick={() => setShowCreateOrgModal(true)}
+              className="bg-cyan-400 text-black font-bold border-3 border-black rounded-lg px-8 py-4 text-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+            >
+              <Plus className="h-6 w-6 mr-2" strokeWidth={2.5} />
+              Create Your Organization
+            </Button>
+          </div>
+        )}
+
+        {/* Manager/Admin View - Full Dashboard */}
+        {(userRole === 'manager' || userRole === 'hr_admin') && (
+          <>
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Total Users Card */}
@@ -442,6 +636,8 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* Create Organization Modal */}
@@ -552,7 +748,7 @@ export function Dashboard() {
                       const displayName = user.first_name && user.last_name 
                         ? `${user.first_name} ${user.last_name}`
                         : user.first_name || user.last_name || 'No name';
-                      const isInOrganization = user.organization_id === userOrganizationId;
+                      const isInOrganization = user.isInOrganization || false;
                       
                       return (
                         <button
@@ -720,8 +916,64 @@ export function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Confirm Remove User Modal */}
+      {showConfirmModal && userToRemove && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border-4 border-black rounded-xl p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-md w-full">
+            <h2 className="text-2xl font-black text-black mb-4">⚠️ Confirm Remove User</h2>
+            <p className="text-lg font-bold text-black/80 mb-6">
+              Are you sure you want to remove <span className="text-red-600">{userToRemove.name}</span> from the organization?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmRemoveUser}
+                className="flex-1 bg-red-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setUserToRemove(null);
+                }}
+                className="flex-1 bg-gray-300 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-8 right-8 z-50 animate-in slide-in-from-bottom-5">
+          <div className={`${
+            toast.type === 'success' 
+              ? 'bg-green-400' 
+              : 'bg-red-400'
+          } border-4 border-black rounded-xl p-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] min-w-[320px] max-w-md`}>
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">
+                {toast.type === 'success' ? '✅' : '❌'}
+              </div>
+              <div className="flex-1">
+                <p className="font-black text-black">{toast.message}</p>
+              </div>
+              <button
+                onClick={() => setToast(null)}
+                className="text-black hover:text-black/70 font-black text-xl"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default Dashboard;
+

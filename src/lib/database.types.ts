@@ -55,37 +55,60 @@ export interface Database {
           updated_at?: string
         }
       }
+      organization_users: {
+        Row: {
+          id: string
+          user_id: string
+          organization_id: string
+          role: 'employee' | 'manager' | 'hr_admin'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          organization_id: string
+          role: 'employee' | 'manager' | 'hr_admin'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          organization_id?: string
+          role?: 'employee' | 'manager' | 'hr_admin'
+          created_at?: string
+          updated_at?: string
+        }
+      }
       users: {
         Row: {
           id: string
           email: string
+          first_name: string | null
+          last_name: string | null
           full_name: string | null
           avatar_url: string | null
-          role: 'employee' | 'manager' | 'hr_admin'
-          department: string | null
-          organization_id: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
           email: string
+          first_name?: string | null
+          last_name?: string | null
           full_name?: string | null
           avatar_url?: string | null
-          role?: 'employee' | 'manager' | 'hr_admin'
-          department?: string | null
-          organization_id?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           email?: string
+          first_name?: string | null
+          last_name?: string | null
           full_name?: string | null
           avatar_url?: string | null
-          role?: 'employee' | 'manager' | 'hr_admin'
-          department?: string | null
-          organization_id?: string | null
           created_at?: string
           updated_at?: string
         }

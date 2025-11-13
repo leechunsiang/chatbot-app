@@ -51,7 +51,7 @@ export async function createConversation(userId: string, title: string = 'New Ch
   console.log('🔍 Verifying user record in database...');
   const { data: userExists, error: userCheckError } = await supabase
     .from('users')
-    .select('id, email, role')
+    .select('id, email')
     .eq('id', userId)
     .maybeSingle();
 
@@ -232,13 +232,12 @@ export async function ensureUserExists(userId: string, email: string) {
       .from('users')
       .upsert({
         id: userId,
-        email: email,
-        role: 'employee'
+        email: email
       }, {
         onConflict: 'id',
         ignoreDuplicates: true
       })
-      .select('id, email, role')
+      .select('id, email')
       .maybeSingle();
 
     if (error) {
@@ -256,7 +255,7 @@ export async function ensureUserExists(userId: string, email: string) {
         // Fetch the existing user
         const { data: existingUser, error: fetchError } = await supabase
           .from('users')
-          .select('id, email, role')
+          .select('id, email')
           .eq('id', userId)
           .maybeSingle();
 

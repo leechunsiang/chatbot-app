@@ -103,10 +103,11 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
     try {
       const { supabase } = await import('@/lib/supabase');
       const { data, error } = await supabase
-        .from('users')
+        .from('organization_users')
         .select('organization_id')
-        .eq('id', userId)
-        .single();
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
         console.error('Error checking organization:', error);

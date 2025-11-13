@@ -33,32 +33,51 @@ export function App() {
 
       await ensureUserExists(userId, email);
 
-      // Fetch user profile with role and first name
+      // Fetch user profile with first name
       const { data: profile, error } = await supabase
         .from('users')
-        .select('role, first_name, organization_id')
+        .select('first_name')
         .eq('id', userId)
         .maybeSingle();
 
       if (error) {
         console.log('⚠️ Error fetching user profile:', error.message);
-        return 'employee';
       }
 
-      if (profile) {
-        console.log('✅ User role:', profile.role);
-        if (profile.first_name) {
-          setUserFirstName(profile.first_name);
-        }
-        setHasOrganization(!!profile.organization_id);
-        return (profile.role as UserRole) || 'employee';
+      if (profile?.first_name) {
+        setUserFirstName(profile.first_name);
       }
 
-      console.log('⚠️ No user profile found, defaulting to employee');
-      setHasOrganization(false);
-      return 'employee';
+      // Check if user belongs to any organization
+      const { data: orgData, error: orgError } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      if (orgError) {
+        console.log('⚠️ Error checking organization:', orgError);
+      }
+
+      const hasOrg = !!orgData?.organization_id;
+      console.log('🏢 Organization check - Data:', orgData, 'Has org:', hasOrg);
+      setHasOrganization(hasOrg);
+
+      // Get user's role from their primary/first organization
+      const { data: roleData } = await supabase
+        .from('organization_users')
+        .select('role')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
+
+      const userRole = (roleData?.role as UserRole) || 'employee';
+      console.log('✅ User role:', userRole);
+      return userRole;
     } catch (err) {
       console.error('❌ Error in ensureUserAndFetchRole:', err);
+      setHasOrganization(false);
       return 'employee';
     }
   };
