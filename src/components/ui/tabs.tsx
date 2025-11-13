@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Bot } from "lucide-react";
-import { TypewriterText } from "./typewriter-text";
+import { MultiLanguageTypewriter } from "./typewriter-text";
 
 type Tab = {
   title: string;
@@ -163,7 +163,7 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userNam
             <Bot className="h-10 w-10 text-black" strokeWidth={2.5} />
             {userName && (
               <div className="text-xl font-bold text-black">
-                <TypewriterText text={`Hi! ${userName}`} speed={80} />
+                <MultiLanguageTypewriter userName={userName} />
               </div>
             )}
           </div>

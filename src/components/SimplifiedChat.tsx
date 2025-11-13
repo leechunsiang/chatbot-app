@@ -445,7 +445,7 @@ ${context}`
                     ) : (
                       <>
                         <p className="text-lg sm:text-xl text-center px-4 font-medium">
-                          Start a conversation with GPT-4.1-nano
+                          Beep boop! Benny's online and ready to chat
                         </p>
                         <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
                           Type a message below to begin

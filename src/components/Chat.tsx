@@ -795,7 +795,7 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 sm:py-32">
                     <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
                     <p className="text-lg sm:text-xl text-center px-4 font-medium leading-relaxed">
-                      Start a conversation with GPT-4.1-nano
+                      Beep boop! Benny's online and ready to chat
                     </p>
                     <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
                       Type a message below to begin
