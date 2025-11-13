@@ -13,6 +13,17 @@ export function Dashboard() {
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const [userId, setUserId] = useState<string>('');
   const [userOrganization, setUserOrganization] = useState<string | null>(null);
+  const [userOrganizationId, setUserOrganizationId] = useState<string | null>(null);
+  const [showManageUsersModal, setShowManageUsersModal] = useState(false);
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null; organization_id: string | null }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isAddingUser, setIsAddingUser] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; name: string } | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'employee' | 'hr_admin' | 'manager'>('employee');
+  const [activeTab, setActiveTab] = useState<'add' | 'view'>('add');
+  const [organizationMembers, setOrganizationMembers] = useState<Array<{ id: string; email: string; first_name: string | null; last_name: string | null; role: string }>>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -42,6 +53,7 @@ export function Dashboard() {
 
         if (!userError && userData?.organization_id && userData.organizations) {
           setUserOrganization((userData.organizations as any).name);
+          setUserOrganizationId(userData.organization_id);
         }
 
         setIsLoading(false);
@@ -109,6 +121,7 @@ export function Dashboard() {
 
       alert(`Organization "${organizationName}" created successfully!`);
       setUserOrganization(organizationName);
+      setUserOrganizationId(orgData.id);
       setShowCreateOrgModal(false);
       setOrganizationName('');
     } catch (error: any) {
@@ -116,6 +129,147 @@ export function Dashboard() {
       alert(`Failed to create organization: ${error.message}`);
     } finally {
       setIsCreatingOrg(false);
+    }
+  };
+
+  const handleSearchUsers = async (email: string) => {
+    setSearchEmail(email);
+    
+    if (email.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, organization_id')
+        .ilike('email', `%${email}%`)
+        .neq('id', userId)
+        .limit(10);
+
+      if (error) throw error;
+      setSearchResults(data || []);
+    } catch (error: any) {
+      console.error('Error searching users:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleAddUserToOrganization = async () => {
+    if (!userOrganizationId || !selectedUser) {
+      alert('No organization or user selected');
+      return;
+    }
+
+    setIsAddingUser(true);
+    try {
+      console.log('Adding user to organization:', {
+        userId: selectedUser.id,
+        organizationId: userOrganizationId,
+        role: selectedRole
+      });
+
+      const { data, error } = await supabase
+        .from('users')
+        .update({ 
+          organization_id: userOrganizationId,
+          role: selectedRole 
+        })
+        .eq('id', selectedUser.id)
+        .select();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Update successful:', data);
+
+      // Show success feedback
+      const roleName = selectedRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      alert(`✅ Successfully added ${selectedUser.name} to your organization as ${roleName}!`);
+      
+      setSearchEmail('');
+      setSearchResults([]);
+      setSelectedUser(null);
+      setSelectedRole('employee');
+      
+      // Refresh members list if on view tab
+      if (activeTab === 'view') {
+        fetchOrganizationMembers();
+      }
+    } catch (error: any) {
+      console.error('Error adding user:', error);
+      alert(`❌ Failed to add user: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsAddingUser(false);
+    }
+  };
+
+  const fetchOrganizationMembers = async () => {
+    if (!userOrganizationId) return;
+
+    setIsLoadingMembers(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, role')
+        .eq('organization_id', userOrganizationId)
+        .neq('id', userId)
+        .order('first_name', { ascending: true });
+
+      if (error) throw error;
+      setOrganizationMembers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching members:', error);
+      alert(`❌ Failed to load members: ${error.message}`);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  };
+
+  const handleRemoveUser = async (memberId: string, memberName: string) => {
+    if (!confirm(`Are you sure you want to remove ${memberName} from your organization?`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          organization_id: null,
+          role: 'employee'
+        })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      alert(`✅ Successfully removed ${memberName} from your organization!`);
+      fetchOrganizationMembers();
+    } catch (error: any) {
+      console.error('Error removing user:', error);
+      alert(`❌ Failed to remove user: ${error.message}`);
+    }
+  };
+
+  const handleUpdateUserRole = async (memberId: string, memberName: string, newRole: string) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      const roleName = newRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      alert(`✅ Successfully updated ${memberName}'s role to ${roleName}!`);
+      fetchOrganizationMembers();
+    } catch (error: any) {
+      console.error('Error updating role:', error);
+      alert(`❌ Failed to update role: ${error.message}`);
     }
   };
 
@@ -265,7 +419,12 @@ export function Dashboard() {
           <div className="bg-white border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black text-black mb-6">Quick Actions</h3>
             <div className="space-y-3">
-              <button className="w-full bg-yellow-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
+              <button 
+                onClick={() => {
+                  setShowManageUsersModal(true);
+                  setActiveTab('add');
+                }}
+                className="w-full bg-yellow-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
                 📝 Manage Users
               </button>
               <button className="w-full bg-pink-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
@@ -327,6 +486,235 @@ export function Dashboard() {
                 className="flex-1 bg-red-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Users Modal */}
+      {showManageUsersModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border-4 border-black rounded-xl p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-3xl font-black text-black mb-6">Manage Users</h2>
+            
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => {
+                  setActiveTab('add');
+                  setSelectedUser(null);
+                  setSearchEmail('');
+                  setSearchResults([]);
+                }}
+                className={`flex-1 px-4 py-3 font-black text-black border-3 border-black rounded-lg transition-all ${
+                  activeTab === 'add'
+                    ? 'bg-cyan-400 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
+                    : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                ➕ Add Users
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('view');
+                  fetchOrganizationMembers();
+                }}
+                className={`flex-1 px-4 py-3 font-black text-black border-3 border-black rounded-lg transition-all ${
+                  activeTab === 'view'
+                    ? 'bg-cyan-400 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
+                    : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                👥 View Members
+              </button>
+            </div>
+            
+            {/* Add User Tab */}
+            {activeTab === 'add' && (
+              <div className="mb-6">
+                <label className="block text-sm font-bold text-black mb-2">
+                  Search User by Email
+                </label>
+                <input
+                  type="email"
+                  value={searchEmail}
+                  onChange={(e) => handleSearchUsers(e.target.value)}
+                  placeholder="Enter user email"
+                  className="w-full px-4 py-3 border-3 border-black rounded-lg font-bold text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  disabled={isAddingUser}
+                />
+                
+                {/* Search Results */}
+                {!selectedUser && searchResults.length > 0 && (
+                  <div className="mt-3 border-3 border-black rounded-lg bg-white max-h-64 overflow-y-auto">
+                    {searchResults.map((user) => {
+                      const displayName = user.first_name && user.last_name 
+                        ? `${user.first_name} ${user.last_name}`
+                        : user.first_name || user.last_name || 'No name';
+                      const isInOrganization = user.organization_id === userOrganizationId;
+                      
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => !isInOrganization && setSelectedUser({ id: user.id, email: user.email, name: displayName })}
+                          disabled={isInOrganization}
+                          className={`w-full text-left px-4 py-3 border-b-2 border-black last:border-b-0 transition-colors ${
+                            isInOrganization 
+                              ? 'bg-green-50 cursor-not-allowed opacity-75' 
+                              : 'hover:bg-yellow-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="font-black text-black">{displayName}</div>
+                              <div className="text-sm font-bold text-black/70">{user.email}</div>
+                              {isInOrganization && (
+                                <div className="text-xs font-bold text-green-600 mt-1">Already in your organization</div>
+                              )}
+                            </div>
+                            {isInOrganization && (
+                              <div className="text-2xl text-green-600">✓</div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {/* Role Selection */}
+                {selectedUser && (
+                  <div className="mt-4 p-4 border-3 border-black rounded-lg bg-blue-50">
+                    <div className="mb-4">
+                      <div className="font-black text-black mb-1">Selected User:</div>
+                      <div className="text-sm font-bold text-black">{selectedUser.name}</div>
+                      <div className="text-xs font-bold text-black/70">{selectedUser.email}</div>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <label className="block text-sm font-bold text-black mb-2">
+                        Select Role
+                      </label>
+                      <select
+                        value={selectedRole}
+                        onChange={(e) => setSelectedRole(e.target.value as 'employee' | 'hr_admin' | 'manager')}
+                        className="w-full px-4 py-3 border-3 border-black rounded-lg font-bold text-black focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        disabled={isAddingUser}
+                      >
+                        <option value="employee">Employee</option>
+                        <option value="manager">Manager</option>
+                        <option value="hr_admin">HR Admin</option>
+                      </select>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddUserToOrganization}
+                        disabled={isAddingUser}
+                        className="flex-1 bg-green-400 border-3 border-black rounded-lg px-4 py-2 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+                      >
+                        {isAddingUser ? 'Adding...' : 'Add User'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedUser(null);
+                          setSelectedRole('employee');
+                        }}
+                        disabled={isAddingUser}
+                        className="flex-1 bg-gray-400 border-3 border-black rounded-lg px-4 py-2 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {isSearching && (
+                  <div className="mt-3 text-center text-sm font-bold text-black/70">
+                    Searching...
+                  </div>
+                )}
+                
+                {searchEmail.length >= 2 && !isSearching && searchResults.length === 0 && !selectedUser && (
+                  <div className="mt-3 text-center text-sm font-bold text-black/70">
+                    No users found
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* View Members Tab */}
+            {activeTab === 'view' && (
+              <div className="mb-6">
+                {isLoadingMembers ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-black border-t-transparent mx-auto mb-4"></div>
+                    <p className="font-bold text-black">Loading members...</p>
+                  </div>
+                ) : organizationMembers.length === 0 ? (
+                  <div className="text-center py-8 text-black/70 font-bold">
+                    No other members in your organization yet.
+                  </div>
+                ) : (
+                  <div className="border-3 border-black rounded-lg bg-white max-h-96 overflow-y-auto">
+                    {organizationMembers.map((member) => {
+                      const displayName = member.first_name && member.last_name 
+                        ? `${member.first_name} ${member.last_name}`
+                        : member.first_name || member.last_name || 'No name';
+                      
+                      return (
+                        <div
+                          key={member.id}
+                          className="px-4 py-4 border-b-2 border-black last:border-b-0"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="font-black text-black">{displayName}</div>
+                              <div className="text-sm font-bold text-black/70 mb-2">{member.email}</div>
+                              
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs font-bold text-black">Role:</label>
+                                <select
+                                  value={member.role}
+                                  onChange={(e) => handleUpdateUserRole(member.id, displayName, e.target.value)}
+                                  className="px-3 py-1 border-2 border-black rounded-lg font-bold text-black text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                >
+                                  <option value="employee">Employee</option>
+                                  <option value="manager">Manager</option>
+                                  <option value="hr_admin">HR Admin</option>
+                                </select>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveUser(member.id, displayName)}
+                              className="bg-red-400 border-3 border-black rounded-lg px-4 py-2 font-black text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowManageUsersModal(false);
+                  setSearchEmail('');
+                  setSearchResults([]);
+                  setSelectedUser(null);
+                  setSelectedRole('employee');
+                  setActiveTab('add');
+                }}
+                disabled={isAddingUser}
+                className="flex-1 bg-red-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Close
               </button>
             </div>
           </div>

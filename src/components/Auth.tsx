@@ -101,10 +101,8 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           }
         }
 
-        setMessage({
-          type: 'success',
-          text: 'Check your email to confirm your account!'
-        });
+        // Sign up successful - auto sign in
+        onAuthSuccess();
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
