@@ -11,10 +11,28 @@ interface AuthProps {
 export function Auth({ onAuthSuccess }: AuthProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [organizationName, setOrganizationName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+
+  // Password strength calculation
+  const calculatePasswordStrength = (pwd: string): { strength: number; label: string; color: string } => {
+    if (!pwd) return { strength: 0, label: '', color: '' };
+    
+    let strength = 0;
+    if (pwd.length >= 8) strength++;
+    if (pwd.length >= 12) strength++;
+    if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) strength++;
+    if (/[0-9]/.test(pwd)) strength++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
+
+    if (strength <= 1) return { strength: 1, label: 'Weak', color: 'bg-red-500' };
+    if (strength <= 3) return { strength: 2, label: 'Medium', color: 'bg-yellow-500' };
+    return { strength: 3, label: 'Strong', color: 'bg-green-500' };
+  };
+
+  const passwordStrength = isSignUp ? calculatePasswordStrength(password) : { strength: 0, label: '', color: '' };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,43 +41,36 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
     try {
       if (isSignUp) {
-        // First, sign up the user with organization name in metadata
+        // Validate passwords match
+        if (password !== confirmPassword) {
+          setMessage({
+            type: 'error',
+            text: 'Passwords do not match'
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        // Validate password strength
+        if (passwordStrength.strength < 2) {
+          setMessage({
+            type: 'error',
+            text: 'Please use a stronger password'
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        // Sign up the user
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: {
-              organization_name: organizationName
-            }
           },
         });
 
         if (authError) throw authError;
-
-        // After signup, if we have a session, create the organization
-        if (authData.session && authData.user) {
-          // Create the organization (now user is authenticated)
-          const { data: orgData, error: orgError } = await supabase
-            .from('organizations')
-            .insert([{ name: organizationName }])
-            .select()
-            .single();
-
-          if (orgError) throw orgError;
-
-          // Update the user's organization_id and set role to hr_admin
-          // (user who creates the org becomes the HR admin)
-          const { error: updateError } = await supabase
-            .from('users')
-            .update({ 
-              organization_id: orgData.id,
-              role: 'hr_admin'
-            })
-            .eq('id', authData.user.id);
-
-          if (updateError) throw updateError;
-        }
 
         setMessage({
           type: 'success',
@@ -138,21 +149,50 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 minLength={6}
                 className="h-10 sm:h-11 lg:h-12 text-sm sm:text-base text-black font-medium placeholder:text-gray-600 bg-white border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
               />
+              
+              {/* Password Strength Meter - Only show during sign up */}
+              {isSignUp && password && (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-gray-700">Password strength:</span>
+                    <span className={`text-xs font-bold ${
+                      passwordStrength.strength === 1 ? 'text-red-600' :
+                      passwordStrength.strength === 2 ? 'text-yellow-600' :
+                      'text-green-600'
+                    }`}>
+                      {passwordStrength.label}
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {[1, 2, 3].map((level) => (
+                      <div
+                        key={level}
+                        className={`h-2 flex-1 rounded-full border-2 border-black transition-colors ${
+                          level <= passwordStrength.strength
+                            ? passwordStrength.color
+                            : 'bg-gray-200'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {isSignUp && (
               <div className="space-y-1 sm:space-y-2">
-                <label htmlFor="organization" className="block text-xs sm:text-sm font-bold text-black mb-1 sm:mb-2">
-                  Organization Name
+                <label htmlFor="confirmPassword" className="block text-xs sm:text-sm font-bold text-black mb-1 sm:mb-2">
+                  Confirm Password
                 </label>
                 <Input
-                  id="organization"
-                  type="text"
-                  placeholder="Enter organization name"
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   disabled={isLoading}
+                  minLength={6}
                   className="h-10 sm:h-11 lg:h-12 text-sm sm:text-base text-black font-medium placeholder:text-gray-600 bg-white border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
                 />
               </div>
@@ -202,7 +242,8 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setMessage(null);
-                  setOrganizationName('');
+                  setConfirmPassword('');
+                  setPassword('');
                 }}
                 className="font-bold text-black hover:underline"
                 disabled={isLoading}

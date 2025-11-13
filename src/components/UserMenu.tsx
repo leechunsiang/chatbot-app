@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { User, LogIn, LogOut, UserPlus } from 'lucide-react';
+import { User, LogIn, LogOut, UserPlus, Smile } from 'lucide-react';
 
 interface UserMenuProps {
   isAuthenticated: boolean;
@@ -83,12 +83,12 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
         onFocus={showMenu}
         onMouseEnter={showMenu}
         onMouseLeave={scheduleHideMenu}
-        className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E5E5E5] border-2 border-black hover:bg-[#D5D5D5] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 shadow-lg hover:shadow-xl"
+        className="flex items-center justify-center w-12 h-12 rounded-full bg-cyan-400 border-3 border-black hover:scale-110 transition-all duration-200 focus:outline-none shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-x-[1px] active:translate-y-[1px]"
         aria-haspopup="menu"
         aria-expanded={isMenuVisible}
         aria-label="User menu"
       >
-        <User className="h-5 w-5 text-black" />
+        <Smile className="h-6 w-6 text-black" strokeWidth={2.5} />
       </button>
 
       <AnimatePresence>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { Bot } from "lucide-react";
 
 type Tab = {
   title: string;
@@ -150,35 +151,57 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
     <div className={cn("w-full", className)}>
       {/* Tab Headers - Interactive Cards */}
       <div 
-        className="relative mb-6 flex flex-col items-center space-y-3"
+        className="relative mb-6"
         onMouseLeave={() => setHoveredTab(null)}
       >
-        {actions && (
-          <div className="flex justify-end w-full z-[100] relative">
-            {actions}
+        <div className="flex items-center justify-between w-full">
+          {/* Robot Logo on Far Left */}
+          <div className="flex items-center z-40">
+            <Bot className="h-10 w-10 text-black" strokeWidth={2.5} />
           </div>
-        )}
 
-        <div className="inline-flex flex-wrap items-center justify-center gap-2 z-40 relative">
-          {tabs.map((tab, index) => (
-            <motion.button
-              key={index}
-              onClick={() => handleTabChange(index)}
-              onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
-              className={cn(
-                "relative px-6 py-3 text-sm font-semibold transition-all rounded-lg bg-[#E5E5E5] dark:bg-[#E5E5E5] border-2 border-black",
-                activeTab === index
-                  ? 'text-black dark:text-black border-b-[6px] border-black'
-                  : 'text-black dark:text-black hover:border-gray-600'
-              )}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              {tab.label}
-            </motion.button>
-          ))}
+          {/* Center Tab Navigation */}
+          <div className="flex-1 flex justify-center">
+            <div className="inline-flex flex-wrap items-center justify-center gap-3 z-40 relative">
+              {tabs.map((tab, index) => {
+                const colors = [
+                  'bg-yellow-400 text-black',
+                  'bg-blue-500 text-white',
+                  'bg-green-500 text-white',
+                  'bg-pink-500 text-white',
+                  'bg-purple-500 text-white',
+                  'bg-orange-500 text-white',
+                ];
+                const activeColor = colors[index % colors.length];
+                
+                return (
+                  <motion.button
+                    key={index}
+                    onClick={() => handleTabChange(index)}
+                    onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
+                    className={cn(
+                      "relative px-6 py-3 text-sm font-bold transition-all rounded-lg border-3 border-black",
+                      activeTab === index
+                        ? `${activeColor} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`
+                        : 'text-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                    )}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    {tab.label}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* User Menu on Far Right */}
+          {actions && (
+            <div className="flex justify-end z-[100]">
+              {actions}
+            </div>
+          )}
         </div>
-
       </div>
 
       {/* Stacked Cards Container */}
