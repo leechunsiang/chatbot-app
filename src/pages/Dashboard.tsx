@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react';
 import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
-import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp } from 'lucide-react';
+import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [showCreateOrgModal, setShowCreateOrgModal] = useState(false);
+  const [organizationName, setOrganizationName] = useState('');
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [userId, setUserId] = useState<string>('');
+  const [userOrganization, setUserOrganization] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -26,6 +31,18 @@ export function Dashboard() {
 
         setIsAuthenticated(true);
         setUserEmail(session.user.email || '');
+        setUserId(session.user.id);
+
+        // Fetch user's organization
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('organization_id, organizations(name)')
+          .eq('id', session.user.id)
+          .single();
+
+        if (!userError && userData?.organization_id && userData.organizations) {
+          setUserOrganization((userData.organizations as any).name);
+        }
 
         setIsLoading(false);
       } catch (err) {
@@ -65,6 +82,43 @@ export function Dashboard() {
     window.location.hash = '#/';
   };
 
+  const handleCreateOrganization = async () => {
+    if (!organizationName.trim()) {
+      alert('Please enter an organization name');
+      return;
+    }
+
+    setIsCreatingOrg(true);
+    try {
+      // Create the organization
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .insert([{ name: organizationName.trim() }])
+        .select()
+        .single();
+
+      if (orgError) throw orgError;
+
+      // Update the user to set them as owner of this organization
+      const { error: userError } = await supabase
+        .from('users')
+        .update({ organization_id: orgData.id })
+        .eq('id', userId);
+
+      if (userError) throw userError;
+
+      alert(`Organization "${organizationName}" created successfully!`);
+      setUserOrganization(organizationName);
+      setShowCreateOrgModal(false);
+      setOrganizationName('');
+    } catch (error: any) {
+      console.error('Error creating organization:', error);
+      alert(`Failed to create organization: ${error.message}`);
+    } finally {
+      setIsCreatingOrg(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-yellow-100 via-pink-100 to-blue-100">
@@ -86,6 +140,12 @@ export function Dashboard() {
             <h1 className="text-3xl font-black text-black tracking-tight">
               HR Dashboard
             </h1>
+            {userOrganization && (
+              <div className="flex items-center gap-2 bg-gradient-to-r from-purple-400 to-pink-400 text-black font-bold border-3 border-black rounded-lg px-6 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                <span className="text-lg">🏢</span>
+                <span>{userOrganization}</span>
+              </div>
+            )}
           </div>
           
           <div className="flex items-center gap-4">
@@ -104,6 +164,26 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* No Organization Overlay */}
+      {!userOrganization && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40">
+          <div className="bg-white border-4 border-black rounded-xl p-12 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-lg text-center">
+            <div className="text-6xl mb-6">🏢</div>
+            <h2 className="text-3xl font-black text-black mb-4">Create an Organization</h2>
+            <p className="text-lg font-bold text-black/70 mb-8">
+              You need to create or join an organization to access the HR Dashboard
+            </p>
+            <Button
+              onClick={() => setShowCreateOrgModal(true)}
+              className="bg-cyan-400 text-black font-bold border-3 border-black rounded-lg px-8 py-4 text-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all"
+            >
+              <Plus className="h-6 w-6 mr-2" strokeWidth={2.5} />
+              Create Organization
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -204,6 +284,54 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Create Organization Modal */}
+      {showCreateOrgModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white border-4 border-black rounded-xl p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] max-w-md w-full">
+            <h2 className="text-3xl font-black text-black mb-6">Create Organization</h2>
+            
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-black mb-2">
+                Organization Name
+              </label>
+              <input
+                type="text"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder="Enter organization name"
+                className="w-full px-4 py-3 border-3 border-black rounded-lg font-bold text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                disabled={isCreatingOrg}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !isCreatingOrg) {
+                    handleCreateOrganization();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleCreateOrganization}
+                disabled={isCreatingOrg}
+                className="flex-1 bg-green-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+              >
+                {isCreatingOrg ? 'Creating...' : 'Create'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateOrgModal(false);
+                  setOrganizationName('');
+                }}
+                disabled={isCreatingOrg}
+                className="flex-1 bg-red-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
