@@ -129,11 +129,12 @@ interface TabsProps {
   defaultActive?: number;
   className?: string;
   actions?: React.ReactNode;
+  leftActions?: React.ReactNode;
   userName?: string;
   onTabChange?: (index: number) => void;
 }
 
-export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userName, onTabChange }: TabsProps) => {
+export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, leftActions, userName, onTabChange }: TabsProps) => {
   const [activeTab, setActiveTab] = useState(defaultActive);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const [previousTab, setPreviousTab] = useState(defaultActive);
@@ -174,6 +175,13 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userNam
 
           {/* Tab Navigation and User Menu on Right */}
           <div className="flex items-center gap-4 z-40">
+            {/* Left Actions (e.g., Organization Selector) */}
+            {leftActions && (
+              <div className="mr-2">
+                {leftActions}
+              </div>
+            )}
+            
             {/* Tab Navigation */}
             <div className="inline-flex flex-wrap items-center gap-3 z-40 relative">
               {tabs.map((tab, index) => {

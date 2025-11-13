@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tabs } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,11 @@ export function App() {
   const [userFirstName, setUserFirstName] = useState<string>('');
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [hasOrganization, setHasOrganization] = useState(false);
+  const [userOrganizations, setUserOrganizations] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [currentOrgName, setCurrentOrgName] = useState<string | null>(null);
+  const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+  const orgDropdownRef = useRef<HTMLDivElement>(null);
 
   const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
@@ -51,30 +56,41 @@ export function App() {
       // Check if user belongs to any organization
       const { data: orgData, error: orgError } = await supabase
         .from('organization_users')
-        .select('organization_id')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
+        .select('organization_id, role, organizations(id, name)')
+        .eq('user_id', userId);
 
       if (orgError) {
         console.log('⚠️ Error checking organization:', orgError);
       }
 
-      const hasOrg = !!orgData?.organization_id;
-      console.log('🏢 Organization check - Data:', orgData, 'Has org:', hasOrg);
-      setHasOrganization(hasOrg);
-
-      // Get user's role from their primary/first organization
-      const { data: roleData } = await supabase
-        .from('organization_users')
-        .select('role')
-        .eq('user_id', userId)
-        .limit(1)
-        .maybeSingle();
-
-      const userRole = (roleData?.role as UserRole) || 'employee';
-      console.log('✅ User role:', userRole);
-      return userRole;
+      if (orgData && orgData.length > 0) {
+        const orgs = orgData.map(membership => ({
+          id: membership.organization_id,
+          name: (membership.organizations as any).name,
+          role: membership.role
+        }));
+        
+        setUserOrganizations(orgs);
+        
+        // Set the first organization as selected by default
+        const firstOrg = orgs[0];
+        setSelectedOrgId(firstOrg.id);
+        setCurrentOrgName(firstOrg.name);
+        setHasOrganization(true);
+        
+        console.log('🏢 User organizations:', orgs);
+        
+        // Get user's role from their primary/first organization
+        const userRole = (firstOrg.role as UserRole) || 'employee';
+        console.log('✅ User role:', userRole);
+        return userRole;
+      } else {
+        setHasOrganization(false);
+        setUserOrganizations([]);
+        setSelectedOrgId(null);
+        setCurrentOrgName(null);
+        return 'employee';
+      }
     } catch (err) {
       console.error('❌ Error in ensureUserAndFetchRole:', err);
       setHasOrganization(false);
@@ -213,6 +229,30 @@ export function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(event.target as Node)) {
+        setShowOrgDropdown(false);
+      }
+    };
+
+    if (showOrgDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showOrgDropdown]);
+
+  const handleSwitchOrganization = (orgId: string) => {
+    const org = userOrganizations.find(o => o.id === orgId);
+    if (org) {
+      setSelectedOrgId(org.id);
+      setCurrentOrgName(org.name);
+      setUserRole(org.role as UserRole);
+      setShowOrgDropdown(false);
+    }
+  };
 
   // Show loading state
   if (isLoading) {
@@ -389,20 +429,68 @@ export function App() {
           className="h-full"
           userName={userFirstName}
           onTabChange={(index) => setActiveTabIndex(index)}
+          leftActions={
+            userOrganizations.length > 0 ? (
+              <div className="relative" ref={orgDropdownRef}>
+                {userOrganizations.length === 1 ? (
+                  <div className="text-sm font-bold text-green-600">
+                    {currentOrgName}
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowOrgDropdown(!showOrgDropdown)}
+                      className="flex items-center gap-2 text-sm font-bold text-green-600 hover:text-green-700 transition-colors"
+                    >
+                      {currentOrgName}
+                      <svg 
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          showOrgDropdown ? 'rotate-180' : 'rotate-0'
+                        }`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showOrgDropdown && (
+                      <div className="absolute left-0 mt-2 w-64 bg-white border-3 border-black rounded-lg shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] z-50 overflow-hidden">
+                        <div className="py-2">
+                          {userOrganizations.map((org) => (
+                            <button
+                              key={org.id}
+                              onClick={() => handleSwitchOrganization(org.id)}
+                              className={`w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors ${
+                                org.id === selectedOrgId ? 'bg-green-100' : ''
+                              }`}
+                            >
+                              <div className="font-bold text-gray-900">{org.name}</div>
+                              <div className="text-sm text-gray-700 capitalize">{org.role}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : undefined
+          }
           actions={
             <UserMenu
-              isAuthenticated={isAuthenticated}
-              userEmail={userEmail}
-              onAuthRequired={async () => {
-                if (!isAuthenticated) {
-                  // User wants to log in - show auth modal
-                  console.log('🔑 User requested login');
-                  setShowAuthModal(true);
-                  return;
-                }
+                isAuthenticated={isAuthenticated}
+                userEmail={userEmail}
+                onAuthRequired={async () => {
+                  if (!isAuthenticated) {
+                    // User wants to log in - show auth modal
+                    console.log('🔑 User requested login');
+                    setShowAuthModal(true);
+                    return;
+                  }
 
-                // User is authenticated and wants to log out
-                console.log('🚪 onAuthRequired called - logging out');
+                  // User is authenticated and wants to log out
+                  console.log('🚪 onAuthRequired called - logging out');
 
                 try {
                   // Clear local state first
