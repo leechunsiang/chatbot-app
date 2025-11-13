@@ -157,17 +157,13 @@ export function MainApp() {
   // Show auth screen if not authenticated
   if (!isAuthenticated) {
     return (
-  <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <Card className="w-full max-w-md mx-4">
-          <CardContent className="pt-6">
-            <Auth onAuthSuccess={async () => {
-              console.log('🔵 Auth success callback triggered');
-              // Don't set loading - let the auth state change handler do it
-              // The auth state change listener will set userId
-            }} />
-          </CardContent>
-        </Card>
-      </div>
+      <Auth
+        onAuthSuccess={async () => {
+          console.log('🔵 Auth success callback triggered');
+          // Don't set loading - let the auth state change handler do it
+          // The auth state change listener will set userId
+        }}
+      />
     );
   }
 

@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
-import { Bot } from 'lucide-react';
+import { Bot, Sparkles, Shield, Zap } from 'lucide-react';
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -86,71 +85,102 @@ export function Auth({ onAuthSuccess }: AuthProps) {
     }
   };
 
-  const handleGuestMode = () => {
-    // Allow guest mode without authentication
-    onAuthSuccess();
-  };
-
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-[hsl(var(--background))]">
-      <Card className="w-full max-w-md shadow-2xl border-border/50">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center mb-2">
-            <Bot className="w-16 h-16 text-primary" />
+    <div className="flex flex-col lg:flex-row min-h-screen w-full bg-[#E5E5E5]">
+      {/* Left Section - Form */}
+      <div className="w-full lg:flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 overflow-y-auto">
+        <div className="w-full max-w-md my-auto">
+          {/* Logo and Header */}
+          <div className="mb-4 sm:mb-6 lg:mb-8">
+            <div className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 mb-3 sm:mb-4 lg:mb-6 bg-black border-3 sm:border-4 border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] lg:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-1 sm:mb-2 text-black">
+              {isSignUp ? 'Create Account' : 'Welcome back'}
+            </h1>
+            <p className="text-sm sm:text-base lg:text-lg text-gray-700">
+              {isSignUp 
+                ? 'Please enter your details.' 
+                : 'Welcome back! Please enter your details.'}
+            </p>
           </div>
-          <CardTitle className="text-3xl font-bold tracking-tight">
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
-          </CardTitle>
-          <CardDescription className="text-base">
-            {isSignUp 
-              ? 'Sign up to save your chat history' 
-              : 'Sign in to access your conversations'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAuth} className="space-y-5">
-            <div className="space-y-2">
+
+          {/* Form */}
+          <form onSubmit={handleAuth} className="space-y-3 sm:space-y-4 lg:space-y-5">
+            <div className="space-y-1 sm:space-y-2">
+              <label htmlFor="email" className="block text-xs sm:text-sm font-bold text-black mb-1 sm:mb-2">
+                Email
+              </label>
               <Input
+                id="email"
                 type="email"
-                placeholder="Email"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="h-12 text-base"
+                className="h-10 sm:h-11 lg:h-12 text-sm sm:text-base text-black font-medium placeholder:text-gray-600 bg-white border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
               />
             </div>
-            <div className="space-y-2">
+            
+            <div className="space-y-1 sm:space-y-2">
+              <label htmlFor="password" className="block text-xs sm:text-sm font-bold text-black mb-1 sm:mb-2">
+                Password
+              </label>
               <Input
+                id="password"
                 type="password"
-                placeholder="Password"
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
                 minLength={6}
-                className="h-12 text-base"
+                className="h-10 sm:h-11 lg:h-12 text-sm sm:text-base text-black font-medium placeholder:text-gray-600 bg-white border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
               />
             </div>
+
             {isSignUp && (
-              <div className="space-y-2">
+              <div className="space-y-1 sm:space-y-2">
+                <label htmlFor="organization" className="block text-xs sm:text-sm font-bold text-black mb-1 sm:mb-2">
+                  Organization Name
+                </label>
                 <Input
+                  id="organization"
                   type="text"
-                  placeholder="Organization Name"
+                  placeholder="Enter organization name"
                   value={organizationName}
                   onChange={(e) => setOrganizationName(e.target.value)}
                   required
                   disabled={isLoading}
-                  className="h-12 text-base"
+                  className="h-10 sm:h-11 lg:h-12 text-sm sm:text-base text-black font-medium placeholder:text-gray-600 bg-white border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:focus:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
                 />
               </div>
             )}
 
+            {!isSignUp && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 text-xs sm:text-sm">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 sm:w-5 sm:h-5 border-2 sm:border-3 border-black rounded accent-black"
+                  />
+                  <span className="font-medium text-black">Remember for 30 days</span>
+                </label>
+                <button
+                  type="button"
+                  className="font-bold text-black hover:underline text-left sm:text-right"
+                >
+                  Forgot password
+                </button>
+              </div>
+            )}
+
             {message && (
-              <div className={`p-4 rounded-xl text-sm font-medium ${
+              <div className={`p-2.5 sm:p-3 lg:p-4 rounded-lg border-3 sm:border-4 font-medium text-xs sm:text-sm ${
                 message.type === 'error' 
-                  ? 'bg-destructive/10 text-destructive border border-destructive/20' 
-                  : 'bg-green-500/10 text-green-400 border border-green-500/20'
+                  ? 'bg-red-100 text-red-800 border-red-700 shadow-[3px_3px_0px_0px_rgba(185,28,28,1)] sm:shadow-[4px_4px_0px_0px_rgba(185,28,28,1)]' 
+                  : 'bg-green-100 text-green-800 border-green-700 shadow-[3px_3px_0px_0px_rgba(21,128,61,1)] sm:shadow-[4px_4px_0px_0px_rgba(21,128,61,1)]'
               }`}>
                 {message.text}
               </div>
@@ -158,23 +188,15 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
             <Button 
               type="submit" 
-              className="w-full h-12 text-base font-semibold"
+              className="w-full h-10 sm:h-11 lg:h-12 text-sm sm:text-base font-bold bg-[#FFDF20] text-black border-3 sm:border-4 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] sm:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] sm:hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] sm:hover:translate-x-[-2px] sm:hover:translate-y-[-2px] transition-all disabled:opacity-50"
               disabled={isLoading}
             >
-              {isLoading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+              {isLoading ? 'Loading...' : isSignUp ? 'Sign up' : 'Sign in'}
             </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-12 text-base font-semibold"
-              onClick={handleGuestMode}
-              disabled={isLoading}
-            >
-              Continue as Guest
-            </Button>
-
-            <div className="text-center text-sm pt-2">
+            <div className="text-center text-xs sm:text-sm pt-1 sm:pt-2">
+              <span className="text-gray-700">{isSignUp ? 'Already have an account?' : "Don't have an account?"}</span>
+              {' '}
               <button
                 type="button"
                 onClick={() => {
@@ -182,17 +204,77 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                   setMessage(null);
                   setOrganizationName('');
                 }}
-                className="text-primary hover:underline font-medium"
+                className="font-bold text-black hover:underline"
                 disabled={isLoading}
               >
-                {isSignUp 
-                  ? 'Already have an account? Sign in' 
-                  : "Don't have an account? Sign up"}
+                {isSignUp ? 'Sign in' : 'Sign up'}
               </button>
             </div>
           </form>
-        </CardContent>
-      </Card>
+
+          {/* Footer */}
+          <div className="mt-4 sm:mt-6 lg:mt-8 text-center text-xs sm:text-sm text-gray-600">
+            © Untitled UI 2077
+          </div>
+        </div>
+      </div>
+
+      {/* Right Section - Fun Design Placeholder */}
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-white p-8 xl:p-16 border-l-6 xl:border-l-8 border-black relative overflow-hidden">
+        {/* Placeholder for future design */}
+        <div className="relative z-10 text-center">
+          <div className="mb-8 inline-block">
+            <div className="w-48 h-48 xl:w-64 xl:h-64 bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 rounded-full border-6 xl:border-8 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] xl:shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] relative">
+              {/* Comic-style decoration dots */}
+              <div className="absolute top-4 right-4 w-3 h-3 xl:w-4 xl:h-4 bg-white border-3 xl:border-4 border-black rounded-full"></div>
+              <div className="absolute top-12 right-8 w-2 h-2 xl:w-3 xl:h-3 bg-white border-3 xl:border-4 border-black rounded-full"></div>
+              <div className="absolute bottom-8 left-8 w-4 h-4 xl:w-5 xl:h-5 bg-yellow-300 border-3 xl:border-4 border-black rounded-full"></div>
+              
+              {/* Center icon */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Sparkles className="w-16 h-16 xl:w-24 xl:h-24 text-white" strokeWidth={3} />
+              </div>
+            </div>
+          </div>
+
+          {/* Comic-style feature badges */}
+          <div className="space-y-5 xl:space-y-6 max-w-sm mx-auto">
+            <div className="bg-yellow-300 border-3 xl:border-4 border-black rounded-lg p-3 xl:p-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] xl:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform rotate-1">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 xl:w-12 xl:h-12 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-5 h-5 xl:w-6 xl:h-6 text-yellow-300" strokeWidth={3} />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-black text-base xl:text-lg">Lightning Fast</h3>
+                  <p className="text-xs xl:text-sm text-black">Powered by AI</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-300 border-3 xl:border-4 border-black rounded-lg p-3 xl:p-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] xl:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform -rotate-1">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 xl:w-12 xl:h-12 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Shield className="w-5 h-5 xl:w-6 xl:h-6 text-blue-300" strokeWidth={3} />
+                </div>
+                <div className="text-left">
+                  <h3 className="font-bold text-black text-base xl:text-lg">Secure & Private</h3>
+                  <p className="text-xs xl:text-sm text-black">Your data is safe</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Background decoration - comic dots pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-6 h-6 xl:w-8 xl:h-8 bg-black rounded-full"></div>
+          <div className="absolute top-40 left-40 w-4 h-4 xl:w-6 xl:h-6 bg-black rounded-full"></div>
+          <div className="absolute bottom-20 right-20 w-6 h-6 xl:w-8 xl:h-8 bg-black rounded-full"></div>
+          <div className="absolute bottom-40 right-40 w-4 h-4 xl:w-6 xl:h-6 bg-black rounded-full"></div>
+          <div className="absolute top-1/2 left-1/4 w-3 h-3 xl:w-4 xl:h-4 bg-black rounded-full"></div>
+          <div className="absolute top-1/3 right-1/3 w-4 h-4 xl:w-5 xl:h-5 bg-black rounded-full"></div>
+        </div>
+      </div>
     </div>
   );
 }
