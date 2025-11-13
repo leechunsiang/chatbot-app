@@ -453,10 +453,10 @@ ${context}`
                         </div>
                       )}
                       <div
-                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] shadow-sm ${
+                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
                           message.role === 'user'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white dark:bg-slate-800 text-foreground border border-border/50'
+                            ? 'bg-blue-600 text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
+                            : 'bg-white dark:bg-slate-800 text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
                         }`}
                       >
                         {message.role === 'assistant' && typingMessageIndex === index ? (
@@ -486,7 +486,7 @@ ${context}`
                     <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md animate-pulse">
                       <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
-                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-white dark:bg-slate-800 border border-border/50 shadow-sm">
+                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 border-2 border-slate-900/10 dark:border-slate-700/50 bg-white dark:bg-slate-800 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]">
                       <div className="flex items-center gap-3">
                         <span className="text-sm text-muted-foreground font-medium">Thinking</span>
                         <div className="flex gap-1.5">

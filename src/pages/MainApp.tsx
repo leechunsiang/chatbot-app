@@ -157,7 +157,7 @@ export function MainApp() {
   // Show auth screen if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+  <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <Card className="w-full max-w-md mx-4">
           <CardContent className="pt-6">
             <Auth onAuthSuccess={async () => {

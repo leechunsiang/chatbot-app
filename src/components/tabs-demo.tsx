@@ -9,7 +9,7 @@ export default function TabsDemo() {
       label: "Product",
       value: "product",
       content: (
-        <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
+  <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-purple-800">
           <p>Product Tab</p>
           <DummyContent />
         </div>
@@ -20,7 +20,7 @@ export default function TabsDemo() {
       label: "Services",
       value: "services",
       content: (
-        <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
+  <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-purple-800">
           <p>Services tab</p>
           <DummyContent />
         </div>
@@ -31,7 +31,7 @@ export default function TabsDemo() {
       label: "Playground",
       value: "playground",
       content: (
-        <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
+  <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-purple-800">
           <p>Playground tab</p>
           <DummyContent />
         </div>
@@ -42,7 +42,7 @@ export default function TabsDemo() {
       label: "Content",
       value: "content",
       content: (
-        <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
+  <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-purple-800">
           <p>Content tab</p>
           <DummyContent />
         </div>
@@ -53,7 +53,7 @@ export default function TabsDemo() {
       label: "Random",
       value: "random",
       content: (
-        <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-gradient-to-br from-purple-700 to-violet-900">
+  <div className="w-full overflow-hidden relative h-full rounded-2xl p-10 text-xl md:text-4xl font-bold text-white bg-purple-800">
           <p>Random tab</p>
           <DummyContent />
         </div>

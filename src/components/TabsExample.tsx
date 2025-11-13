@@ -8,7 +8,7 @@ export function TabsExample() {
     {
       label: 'Overview',
       content: (
-        <div className="p-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 rounded-lg min-h-[400px]">
+  <div className="p-8 bg-blue-50 dark:bg-gray-900 rounded-lg min-h-[400px]">
           <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
             Welcome to Overview
           </h2>
@@ -37,7 +37,7 @@ export function TabsExample() {
     {
       label: 'Analytics',
       content: (
-        <div className="p-8 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-900 dark:to-gray-800 rounded-lg min-h-[400px]">
+  <div className="p-8 bg-purple-50 dark:bg-gray-900 rounded-lg min-h-[400px]">
           <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
             Analytics Dashboard
           </h2>
@@ -65,7 +65,7 @@ export function TabsExample() {
     {
       label: 'Settings',
       content: (
-        <div className="p-8 bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 rounded-lg min-h-[400px]">
+  <div className="p-8 bg-green-50 dark:bg-gray-900 rounded-lg min-h-[400px]">
           <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
             Settings Panel
           </h2>
@@ -97,7 +97,7 @@ export function TabsExample() {
     {
       label: 'Profile',
       content: (
-        <div className="p-8 bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 rounded-lg min-h-[400px]">
+  <div className="p-8 bg-orange-50 dark:bg-gray-900 rounded-lg min-h-[400px]">
           <h2 className="text-3xl font-bold mb-4 text-gray-900 dark:text-white">
             User Profile
           </h2>
@@ -106,7 +106,7 @@ export function TabsExample() {
             while the content transitions with blur, scale, and slide effects.
           </p>
           <div className="flex items-center space-x-4 mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full" />
+            <div className="w-20 h-20 bg-purple-500 rounded-full" />
             <div>
               <h3 className="text-xl font-semibold">John Doe</h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">

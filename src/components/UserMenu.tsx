@@ -83,7 +83,7 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
         onFocus={showMenu}
         onMouseEnter={showMenu}
         onMouseLeave={scheduleHideMenu}
-        className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 shadow-lg hover:shadow-xl"
+  className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg hover:shadow-xl"
         aria-haspopup="menu"
         aria-expanded={isMenuVisible}
         aria-label="User menu"
