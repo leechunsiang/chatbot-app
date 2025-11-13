@@ -66,6 +66,8 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [typingMessageIndex, setTypingMessageIndex] = useState<number | null>(null);
+  const [hasOrganization, setHasOrganization] = useState<boolean>(false);
+  const [isCheckingOrganization, setIsCheckingOrganization] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize OpenAI client
@@ -91,7 +93,35 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
     console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
     setUserId(initialUserId);
     setIsInitializing(false);
+    
+    // Check if user has an organization
+    checkUserOrganization(initialUserId);
   }, [initialUserId]);
+
+  const checkUserOrganization = async (userId: string) => {
+    setIsCheckingOrganization(true);
+    try {
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error checking organization:', error);
+        setHasOrganization(false);
+      } else {
+        setHasOrganization(!!data?.organization_id);
+        console.log('User organization status:', !!data?.organization_id);
+      }
+    } catch (err) {
+      console.error('Error checking organization:', err);
+      setHasOrganization(false);
+    } finally {
+      setIsCheckingOrganization(false);
+    }
+  };
 
   const ensureConversation = async (): Promise<string> => {
     if (conversationId) {
@@ -309,6 +339,28 @@ ${context}`
       <div className="absolute inset-0 overflow-hidden z-0 opacity-30">
         <Boxes />
       </div>
+
+      {/* Organization Required Overlay */}
+      {!isCheckingOrganization && !hasOrganization && isAuthenticated && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 border-4 border-black dark:border-white rounded-2xl p-8 max-w-md mx-4 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-yellow-400 border-3 border-black rounded-full flex items-center justify-center mb-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <AlertCircle className="w-8 h-8 text-black" strokeWidth={2.5} />
+              </div>
+              <h3 className="text-2xl font-black text-black dark:text-white mb-2">
+                Organization Required
+              </h3>
+              <p className="text-base font-bold text-black/70 dark:text-white/70 mb-4">
+                You need to be part of an organization to use the chatbot.
+              </p>
+              <p className="text-sm font-semibold text-black/60 dark:text-white/60">
+                Please contact your administrator to be added to an organization.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar */}
       <div
@@ -534,16 +586,16 @@ ${context}`
                 }}
                 placeholder={isInitializing ? "Initializing..." : "Type your message..."}
                 // Enable typing as soon as we have a userId even if conversation still creating
-                disabled={isLoading || (!userId)}
+                disabled={isLoading || (!userId) || !hasOrganization}
                 className="flex-1 text-base h-10 sm:h-12 px-3 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <Button
                 type="submit"
-                disabled={isLoading || !input.trim() || !userId}
+                disabled={isLoading || !input.trim() || !userId || !hasOrganization}
                 size="icon"
                 variant="ghost"
                 className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 hover:bg-transparent text-blue-600 hover:text-purple-600 transition-colors"
-                title={!userId ? 'Waiting for user session' : !input.trim() ? 'Enter a message' : 'Send message'}
+                title={!userId ? 'Waiting for user session' : !hasOrganization ? 'Organization required' : !input.trim() ? 'Enter a message' : 'Send message'}
               >
                 <Send className="w-5 h-5 sm:w-6 sm:h-6" />
               </Button>

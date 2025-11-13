@@ -130,9 +130,10 @@ interface TabsProps {
   className?: string;
   actions?: React.ReactNode;
   userName?: string;
+  onTabChange?: (index: number) => void;
 }
 
-export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userName }: TabsProps) => {
+export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userName, onTabChange }: TabsProps) => {
   const [activeTab, setActiveTab] = useState(defaultActive);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const [previousTab, setPreviousTab] = useState(defaultActive);
@@ -148,6 +149,9 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userNam
     
     // Reset animation flag after transition
     setTimeout(() => setIsAnimating(false), 1000);
+    
+    // Notify parent of tab change
+    onTabChange?.(newIndex);
   };
 
   return (
@@ -342,10 +346,14 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userNam
               }}
             >
               <div className={cn(
-                "w-full h-full rounded-3xl shadow-sm border transition-colors bg-white dark:bg-gray-900",
+                "w-full h-full rounded-3xl transition-colors bg-white dark:bg-gray-900",
+                // Comic book style border
+                "border-4 border-black dark:border-white",
+                // Multiple shadows for comic effect
+                "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]",
                 isActive
-                  ? 'border-blue-500/50'
-                  : 'border-gray-300 dark:border-gray-600'
+                  ? 'border-blue-600 dark:border-blue-400 shadow-[6px_6px_0px_0px_rgba(37,99,235,1)] dark:shadow-[6px_6px_0px_0px_rgba(96,165,250,1)]'
+                  : ''
               )}>
                 {tab.content}
               </div>

@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/button';
 import { SimplifiedChat } from '@/components/SimplifiedChat';
 import { Auth } from '@/components/Auth';
 import { ResetPassword } from '@/components/ResetPassword';
-import { HRDashboard } from '@/components/dashboard/HRDashboard';
-import { FAQManagement } from '@/components/dashboard/FAQManagement';
 import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { ensureUserExists } from '@/lib/database';
@@ -25,6 +23,8 @@ export function App() {
   const [isPasswordReset, setIsPasswordReset] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userFirstName, setUserFirstName] = useState<string>('');
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
+  const [hasOrganization, setHasOrganization] = useState(false);
 
   const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
@@ -36,7 +36,7 @@ export function App() {
       // Fetch user profile with role and first name
       const { data: profile, error } = await supabase
         .from('users')
-        .select('role, first_name')
+        .select('role, first_name, organization_id')
         .eq('id', userId)
         .maybeSingle();
 
@@ -50,10 +50,12 @@ export function App() {
         if (profile.first_name) {
           setUserFirstName(profile.first_name);
         }
+        setHasOrganization(!!profile.organization_id);
         return (profile.role as UserRole) || 'employee';
       }
 
       console.log('⚠️ No user profile found, defaulting to employee');
+      setHasOrganization(false);
       return 'employee';
     } catch (err) {
       console.error('❌ Error in ensureUserAndFetchRole:', err);
@@ -262,7 +264,7 @@ export function App() {
         </span>
       ),
       content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} />,
-      disabled: false,
+      disabled: !isAuthenticated || !hasOrganization,
     },
     {
       label: (
@@ -284,7 +286,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
-      disabled: !isAuthenticated,
+      disabled: !isAuthenticated || !hasOrganization,
     },
     {
       label: (
@@ -306,7 +308,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
-      disabled: !isAuthenticated,
+      disabled: !isAuthenticated || !hasOrganization,
     },
     {
       label: (
@@ -318,21 +320,17 @@ export function App() {
       content: (
         <Card className="w-full h-full">
           <CardContent className="p-8">
-            {userRole === 'hr_admin' ? (
-              <FAQManagement />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
-                <HelpCircle className="w-16 h-16 text-muted-foreground mb-4" />
-                <h2 className="text-2xl font-bold mb-2">FAQ Management</h2>
-                <p className="text-muted-foreground text-center max-w-md">
-                  Browse frequently asked questions. Coming soon.
-                </p>
-              </div>
-            )}
+            <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
+              <HelpCircle className="w-16 h-16 text-muted-foreground mb-4" />
+              <h2 className="text-2xl font-bold mb-2">FAQ Management</h2>
+              <p className="text-muted-foreground text-center max-w-md">
+                Browse frequently asked questions. Coming soon.
+              </p>
+            </div>
           </CardContent>
         </Card>
       ),
-      disabled: !isAuthenticated,
+      disabled: !isAuthenticated || !hasOrganization,
     },
   ];
 
@@ -348,7 +346,13 @@ export function App() {
       content: (
         <Card className="w-full h-full border-0 shadow-none">
           <CardContent className="p-0 h-full">
-            <HRDashboard />
+            <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
+              <BarChart3 className="w-16 h-16 text-muted-foreground mb-4" />
+              <h2 className="text-2xl font-bold mb-2">Dashboard</h2>
+              <p className="text-muted-foreground text-center max-w-md">
+                Click the Dashboard button in the user menu to access the full dashboard.
+              </p>
+            </div>
           </CardContent>
         </Card>
       ),
@@ -362,9 +366,10 @@ export function App() {
         {/* Tabs with Stacked Cards */}
         <Tabs 
           tabs={tabs} 
-          defaultActive={0} 
+          defaultActive={activeTabIndex} 
           className="h-full"
           userName={userFirstName}
+          onTabChange={(index) => setActiveTabIndex(index)}
           actions={
             <UserMenu
               isAuthenticated={isAuthenticated}

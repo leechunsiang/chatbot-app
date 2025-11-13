@@ -553,8 +553,8 @@ Note: Currently, no policy documents are available. Encourage users to check wit
             {/* New Chat Button */}
             <Button
               onClick={handleNewChat}
-              className="w-full mb-6 justify-center gap-3 h-11 font-medium hover:bg-accent/80"
-              variant="default"
+              className="w-full mb-6 justify-center gap-3 h-11 font-medium !rounded-xl !border-[3px] !border-black dark:!border-white !shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:!shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:!shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] dark:hover:!shadow-[5px_5px_0px_0px_rgba(255,255,255,1)] hover:!-translate-x-[2px] hover:!-translate-y-[2px] active:!shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:active:!shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] active:!translate-x-[1px] active:!translate-y-[1px] !transition-all !duration-150 bg-primary text-primary-foreground"
+              variant="outline"
               style={{ justifyContent: open ? 'flex-start' : 'center' }}
             >
               <MessageSquarePlus className="w-5 h-5 flex-shrink-0" />
@@ -601,7 +601,7 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                         className={cn(
                           "flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
                           conversationId === conversation.id 
-                            ? "bg-accent/80 shadow-sm" 
+                            ? "bg-accent/80 border-[3px] border-black dark:border-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]" 
                             : "hover:bg-accent/40"
                         )}
                         style={{ justifyContent: open ? 'flex-start' : 'center' }}

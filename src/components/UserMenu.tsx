@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { User, LogIn, LogOut, UserPlus, Smile, Frown } from 'lucide-react';
+import { User, LogIn, LogOut, UserPlus, Smile, Frown, LayoutDashboard } from 'lucide-react';
 
 interface UserMenuProps {
   isAuthenticated: boolean;
@@ -45,6 +45,14 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
     if (onAuthRequired) {
       onAuthRequired();
     }
+  };
+
+  const handleDashboardClick = () => {
+    console.log('🎯 Dashboard button clicked!');
+    setIsMenuVisible(false);
+    console.log('🎯 Setting hash to #/dashboard');
+    window.location.hash = '#/dashboard';
+    console.log('🎯 Current hash:', window.location.hash);
   };
 
   const showMenu = () => {
@@ -118,6 +126,14 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
                     {userEmail}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={handleDashboardClick}
+                  className="flex w-full items-center gap-2 px-4 py-2 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition-colors"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  <span>Dashboard</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}
