@@ -117,7 +117,7 @@ export const FadeInDiv = ({
 
 // Enhanced Tabs with Rich Page-Like Transitions
 interface TabItem {
-  label: string;
+  label: string | React.ReactNode;
   content: React.ReactNode;
 }
 
@@ -150,26 +150,26 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
     <div className={cn("w-full", className)}>
       {/* Tab Headers - Interactive Cards */}
       <div 
-        className="relative mb-6 flex flex-col items-end space-y-3"
+        className="relative mb-6 flex flex-col items-center space-y-3"
         onMouseLeave={() => setHoveredTab(null)}
       >
         {actions && (
-          <div className="flex justify-end z-[100] relative">
+          <div className="flex justify-end w-full z-[100] relative">
             {actions}
           </div>
         )}
 
-        <div className="inline-flex flex-wrap items-center gap-2 self-start z-50 relative">
+        <div className="inline-flex flex-wrap items-center justify-center gap-2 z-40 relative">
           {tabs.map((tab, index) => (
             <motion.button
               key={index}
               onClick={() => handleTabChange(index)}
               onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
               className={cn(
-                "relative px-6 py-3 text-sm font-medium transition-all rounded-lg",
+                "relative px-6 py-3 text-sm font-semibold transition-all rounded-lg bg-[#E5E5E5] dark:bg-[#E5E5E5] border-2 border-black",
                 activeTab === index
-                  ? 'text-white bg-blue-600 shadow-lg'
-                  : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  ? 'text-black dark:text-black border-b-[6px] border-black'
+                  : 'text-black dark:text-black hover:border-gray-600'
               )}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -208,22 +208,22 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
           
           // Active card should ALWAYS remain in active state, even when hovering
           if (isActive && !isAnimating) {
-            zIndex = 100;
+            zIndex = 20;
             stackLayer = 0;
             animationState = 'active';
           } else if (isActive && isAnimating) {
-            zIndex = 100;
+            zIndex = 20;
             stackLayer = 0;
             animationState = 'entering';
           } else if (wasPrevious && isAnimating) {
-            zIndex = 90;
+            zIndex = 18;
             stackLayer = 0;
             animationState = 'exiting';
           } else if (isStackedPreview) {
             // Create stack order based on distance from active tab
             const distance = Math.abs(index - activeTab);
             stackLayer = distance;
-            zIndex = 50 - distance;
+            zIndex = Math.max(5, 12 - distance * 2);
             animationState = 'stacked';
           } else {
             animationState = 'hidden';

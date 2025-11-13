@@ -9,7 +9,7 @@ import { FAQManagement } from '@/components/dashboard/FAQManagement';
 import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { ensureUserExists } from '@/lib/database';
-import { FileText, Gift, HelpCircle } from 'lucide-react';
+import { FileText, Gift, HelpCircle, MessageSquare, BarChart3 } from 'lucide-react';
 
 type UserRole = 'employee' | 'manager' | 'hr_admin';
 
@@ -224,11 +224,21 @@ export function App() {
   // Main tabs configuration
   const tabs = [
     {
-      label: '💬 Chatbot',
+      label: (
+        <span className="flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-black" />
+          Chatbot
+        </span>
+      ),
       content: <SimplifiedChat initialUserId={userId} />,
     },
     {
-      label: '📄 Policy',
+      label: (
+        <span className="flex items-center gap-2">
+          <FileText className="w-5 h-5 text-black" />
+          Policy
+        </span>
+      ),
       content: (
         <Card className="w-full h-full">
           <CardContent className="p-8">
@@ -244,7 +254,12 @@ export function App() {
       ),
     },
     {
-      label: '🎁 Benefits',
+      label: (
+        <span className="flex items-center gap-2">
+          <Gift className="w-5 h-5 text-black" />
+          Benefits
+        </span>
+      ),
       content: (
         <Card className="w-full h-full">
           <CardContent className="p-8">
@@ -260,7 +275,12 @@ export function App() {
       ),
     },
     {
-      label: '❓ FAQ',
+      label: (
+        <span className="flex items-center gap-2">
+          <HelpCircle className="w-5 h-5 text-black" />
+          FAQ
+        </span>
+      ),
       content: (
         <Card className="w-full h-full">
           <CardContent className="p-8">
@@ -284,7 +304,12 @@ export function App() {
   // Add dashboard tab for hr_admin
   if (userRole === 'hr_admin') {
     tabs.push({
-      label: '📊 Dashboard',
+      label: (
+        <span className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-black" />
+          Dashboard
+        </span>
+      ),
       content: (
         <Card className="w-full h-full border-0 shadow-none">
           <CardContent className="p-0 h-full">
@@ -296,7 +321,7 @@ export function App() {
   }
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 dark:from-gray-900 dark:via-blue-950/30 dark:to-purple-950/30 px-3 py-4 md:px-4 md:py-6 overflow-hidden">
+    <div className="h-screen w-screen bg-background px-3 py-4 md:px-4 md:py-6 overflow-hidden">
       {/* User Menu - Fixed to top right */}
       <div className="fixed top-4 right-4 md:top-6 md:right-6 z-50">
         <UserMenu

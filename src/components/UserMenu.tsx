@@ -83,12 +83,12 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
         onFocus={showMenu}
         onMouseEnter={showMenu}
         onMouseLeave={scheduleHideMenu}
-  className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-lg hover:shadow-xl"
+        className="flex items-center justify-center w-10 h-10 rounded-full bg-[#E5E5E5] border-2 border-black hover:bg-[#D5D5D5] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 shadow-lg hover:shadow-xl"
         aria-haspopup="menu"
         aria-expanded={isMenuVisible}
         aria-label="User menu"
       >
-        <User className="h-5 w-5 text-white" />
+        <User className="h-5 w-5 text-black" />
       </button>
 
       <AnimatePresence>
@@ -103,7 +103,7 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
             exit={{ opacity: 0, scale: 0.95, y: -6 }}
             transition={{ type: 'spring', stiffness: 320, damping: 26, mass: 0.9 }}
             style={{ transformOrigin: 'top right' }}
-            className="absolute right-0 mt-3 w-56 rounded-xl border border-border/40 bg-white/95 dark:bg-slate-900/95 shadow-xl backdrop-blur-sm py-2 text-sm z-50"
+            className="absolute right-0 mt-3 w-56 rounded-xl border border-border/40 bg-white dark:bg-slate-900 shadow-xl py-2 text-sm z-50"
           >
             {isAuthenticated ? (
               <>

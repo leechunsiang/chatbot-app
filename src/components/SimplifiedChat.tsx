@@ -313,7 +313,7 @@ ${context}`
       <div
         className={`${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-  } fixed inset-y-0 left-0 z-50 w-64 bg-slate-100/80 dark:bg-slate-800/90 backdrop-blur-sm border-r border-border/40 transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
+  } fixed inset-y-0 left-0 z-50 w-64 bg-slate-100 dark:bg-slate-800 border-r border-border/40 transition-transform duration-300 ease-in-out md:relative md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}

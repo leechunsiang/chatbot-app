@@ -515,12 +515,12 @@ Note: Currently, no policy documents are available. Encourage users to check wit
 
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[hsl(var(--background))]">
+    <div className="flex h-full w-full overflow-hidden bg-[hsl(var(--background))] rounded-3xl">
       <Sidebar open={open} setOpen={setOpen}>
         <SidebarBody className="justify-between gap-6 bg-[hsl(var(--sidebar-bg))]">
           <div className="flex flex-col flex-1 overflow-hidden">
             {/* Logo/Title */}
-            <div className="flex items-center gap-3 mb-6 pt-12">
+            <div className="flex items-center gap-3 mb-6 pt-4">
               <motion.div
                 initial={false}
                 animate={{
@@ -761,12 +761,12 @@ Note: Currently, no policy documents are available. Encourage users to check wit
         </SidebarBody>
       </Sidebar>
 
-      {/* Main Chat Area */}
-      <div className="flex flex-col h-screen flex-1 overflow-hidden bg-[hsl(var(--chat-bg))]">
+  {/* Main Chat Area */}
+  <div className="flex flex-col h-full flex-1 overflow-hidden bg-[hsl(var(--chat-bg))] rounded-2xl">
         <div className="flex flex-col h-full max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
           {/* Error Banner */}
           {error && (
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3 backdrop-blur-sm">
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-destructive font-semibold">Error</p>
@@ -788,8 +788,8 @@ Note: Currently, no policy documents are available. Encourage users to check wit
           </div>
 
           {/* Messages Area */}
-          <div className="flex-1 border border-border/50 rounded-2xl bg-card/30 backdrop-blur-sm overflow-hidden shadow-lg">
-            <ScrollArea className="h-full" ref={scrollAreaRef}>
+          <div className="flex-1 rounded-2xl overflow-hidden bg-transparent">
+            <ScrollArea className="h-full rounded-2xl bg-transparent" ref={scrollAreaRef}>
               <div className="p-6 sm:p-8 space-y-6">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 sm:py-32">
@@ -815,10 +815,10 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                         </div>
                       )}
                       <div
-                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] shadow-sm ${
+                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
                           message.role === 'user'
-                            ? 'bg-[hsl(var(--message-user))] text-white'
-                            : 'bg-[hsl(var(--message-assistant))] text-foreground'
+                            ? 'bg-[hsl(var(--message-user))] text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
+                            : 'bg-[hsl(var(--message-assistant))] text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
                         }`}
                       >
                         <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
@@ -838,7 +838,7 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                     <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/90 flex items-center justify-center shadow-md">
                       <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
                     </div>
-                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-[hsl(var(--message-assistant))] shadow-sm">
+                    <div className="rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 bg-[hsl(var(--message-assistant))] border-2 border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]">
                       <div className="flex gap-1.5">
                         <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                         <div className="w-2 h-2 bg-foreground/50 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -854,10 +854,21 @@ Note: Currently, no policy documents are available. Encourage users to check wit
 
           {/* Input Area */}
           <form onSubmit={sendMessage} className="mt-6 sm:mt-8">
-            <div className="flex gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-border/40 bg-slate-100 dark:bg-slate-900 shadow-md hover:shadow-lg transition-all focus-within:bg-white dark:focus-within:bg-slate-900 focus-within:border-primary/50">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isLoading && input.trim() && userId && conversationId) {
+                      const form = (e.currentTarget as HTMLInputElement).form;
+                      if (form) {
+                        form.requestSubmit();
+                      }
+                    }
+                  }
+                }}
                 placeholder={
                   !userId
                     ? "Signing in..."
@@ -865,20 +876,23 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                     ? "Loading conversation..."
                     : "Type your message..."
                 }
-                disabled={isLoading}
-                className="flex-1 text-base h-12 sm:h-14 px-5 rounded-xl border-border/50 bg-card/50 backdrop-blur-sm focus:bg-card transition-colors"
+                disabled={isLoading || !userId}
+                className="flex-1 text-base h-10 sm:h-12 px-3 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <Button
                 type="submit"
                 disabled={isLoading || !input.trim() || !conversationId || !userId}
                 size="icon"
-                className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl shadow-md hover:shadow-lg transition-shadow"
+                variant="ghost"
+                className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0 hover:bg-transparent text-primary hover:text-primary/80 transition-colors"
                 title={
-                  !conversationId || !userId
-                    ? "Chat not ready - check console for errors"
+                  !userId
+                    ? 'Waiting for authentication'
+                    : !conversationId
+                    ? 'Preparing conversation...'
                     : !input.trim()
-                    ? "Enter a message first"
-                    : "Send message"
+                    ? 'Enter a message first'
+                    : 'Send message'
                 }
               >
                 <Send className="w-5 h-5 sm:w-6 sm:h-6" />
