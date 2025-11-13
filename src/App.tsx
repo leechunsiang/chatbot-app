@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { SimplifiedChat } from '@/components/SimplifiedChat';
 import { Auth } from '@/components/Auth';
+import { ResetPassword } from '@/components/ResetPassword';
 import { HRDashboard } from '@/components/dashboard/HRDashboard';
 import { FAQManagement } from '@/components/dashboard/FAQManagement';
 import { UserMenu } from '@/components/UserMenu';
@@ -21,6 +22,7 @@ export function App() {
   const [userEmail, setUserEmail] = useState<string>('');
   const [userId, setUserId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isPasswordReset, setIsPasswordReset] = useState(false);
 
   const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
@@ -60,6 +62,17 @@ export function App() {
     const initAuth = async () => {
       try {
         if (!mounted) return;
+
+        // Check if this is a password reset flow
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const type = hashParams.get('type');
+        
+        if (type === 'recovery') {
+          console.log('🔑 Password reset flow detected');
+          setIsPasswordReset(true);
+          setIsLoading(false);
+          return;
+        }
 
         console.log('🔐 Initializing auth...');
         setLoadingPhase('Checking session...');
@@ -125,6 +138,12 @@ export function App() {
 
         console.log('🔄 Auth state changed:', event, { hasSession: !!session });
 
+        // If password reset is in progress, ignore auth state changes
+        if (isPasswordReset) {
+          console.log('🔑 Password reset in progress, ignoring auth state change');
+          return;
+        }
+
         // Handle sign out explicitly
         if (event === 'SIGNED_OUT' || !session) {
           console.log('👋 User signed out, clearing all state');
@@ -189,6 +208,27 @@ export function App() {
           )}
         </div>
       </div>
+    );
+  }
+
+  // Show password reset screen if in reset flow
+  if (isPasswordReset) {
+    return (
+      <ResetPassword
+        onResetComplete={() => {
+          console.log('🔑 Password reset complete, redirecting to login');
+          setIsPasswordReset(false);
+          // Clear the hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+        }}
+        onCancel={async () => {
+          console.log('🔑 Password reset cancelled, signing out');
+          await supabase.auth.signOut();
+          setIsPasswordReset(false);
+          // Clear the hash from URL
+          window.history.replaceState(null, '', window.location.pathname);
+        }}
+      />
     );
   }
 
@@ -318,41 +358,43 @@ export function App() {
 
   return (
     <div className="h-screen w-screen bg-background px-3 py-4 md:px-4 md:py-6 overflow-hidden">
-      {/* User Menu - Fixed to top right */}
-      <div className="fixed top-4 right-4 md:top-6 md:right-6 z-50">
-        <UserMenu
-          isAuthenticated={isAuthenticated}
-          userEmail={userEmail}
-          onAuthRequired={async () => {
-            console.log('🚪 onAuthRequired called - logging out');
-
-            try {
-              // Clear local state first
-              setIsAuthenticated(false);
-              setUserId(null);
-              setUserEmail('');
-              setUserRole('employee');
-
-              // Then sign out from Supabase
-              const { error } = await supabase.auth.signOut({ scope: 'global' });
-
-              if (error) {
-                console.error('❌ Logout error:', error);
-                // Even on error, keep the local state cleared
-              } else {
-                console.log('✅ Successfully logged out');
-              }
-            } catch (err) {
-              console.error('❌ Exception during logout:', err);
-              // Keep local state cleared even if signOut fails
-            }
-          }}
-        />
-      </div>
-      
       <div className="h-full w-full">
         {/* Tabs with Stacked Cards */}
-        <Tabs tabs={tabs} defaultActive={0} className="h-full" />
+        <Tabs 
+          tabs={tabs} 
+          defaultActive={0} 
+          className="h-full"
+          actions={
+            <UserMenu
+              isAuthenticated={isAuthenticated}
+              userEmail={userEmail}
+              onAuthRequired={async () => {
+                console.log('🚪 onAuthRequired called - logging out');
+
+                try {
+                  // Clear local state first
+                  setIsAuthenticated(false);
+                  setUserId(null);
+                  setUserEmail('');
+                  setUserRole('employee');
+
+                  // Then sign out from Supabase
+                  const { error } = await supabase.auth.signOut({ scope: 'global' });
+
+                  if (error) {
+                    console.error('❌ Logout error:', error);
+                    // Even on error, keep the local state cleared
+                  } else {
+                    console.log('✅ Successfully logged out');
+                  }
+                } catch (err) {
+                  console.error('❌ Exception during logout:', err);
+                  // Keep local state cleared even if signOut fails
+                }
+              }}
+            />
+          }
+        />
       </div>
     </div>
   );

@@ -160,9 +160,10 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
             <Bot className="h-10 w-10 text-black" strokeWidth={2.5} />
           </div>
 
-          {/* Center Tab Navigation */}
-          <div className="flex-1 flex justify-center">
-            <div className="inline-flex flex-wrap items-center justify-center gap-3 z-40 relative">
+          {/* Tab Navigation and User Menu on Right */}
+          <div className="flex items-center gap-4 z-40">
+            {/* Tab Navigation */}
+            <div className="inline-flex flex-wrap items-center gap-3 z-40 relative">
               {tabs.map((tab, index) => {
                 const colors = [
                   'bg-yellow-400 text-black',
@@ -193,14 +194,14 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
                 );
               })}
             </div>
-          </div>
 
-          {/* User Menu on Far Right */}
-          {actions && (
-            <div className="flex justify-end z-[100]">
-              {actions}
-            </div>
-          )}
+            {/* User Menu */}
+            {actions && (
+              <div className="flex justify-end z-[100]">
+                {actions}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
