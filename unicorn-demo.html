@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unicorn Studio Animation Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 3rem;
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+        }
+
+        .demo-title {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .animation-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+        }
+
+        .info-box code {
+            background: #e7ecff;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .controls label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .controls input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .controls button {
+            margin-top: 1rem;
+            padding: 0.75rem 2rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .controls button:hover {
+            background: #5568d3;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .demo-section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦄 Unicorn Studio Animation Demo</h1>
+        <p class="subtitle">Interactive animation embedding demonstration</p>
+
+        <!-- Main Demo -->
+        <div class="demo-section">
+            <h2 class="demo-title">Full Size Animation</h2>
+            <div class="animation-container">
+                <div data-us-project="8OETB8reudHlzT6Tazpd" style="width:100%; height:600px"></div>
+            </div>
+            <div class="info-box">
+                <strong>Project ID:</strong> <code>8OETB8reudHlzT6Tazpd</code><br>
+                <strong>Dimensions:</strong> 100% width × 600px height
+            </div>
+        </div>
+
+        <!-- Responsive Demo -->
+        <div class="demo-section">
+            <h2 class="demo-title">Responsive Animation</h2>
+            <div class="animation-container">
+                <div data-us-project="8OETB8reudHlzT6Tazpd" style="width:100%; height:400px; max-width: 800px; margin: 0 auto;"></div>
+            </div>
+            <div class="info-box">
+                <strong>Features:</strong> Centered, max-width 800px, responsive<br>
+                <strong>Height:</strong> 400px
+            </div>
+        </div>
+
+        <!-- Custom Project ID Demo -->
+        <div class="demo-section">
+            <h2 class="demo-title">Custom Project Loader</h2>
+            <div class="controls">
+                <label for="projectId">Enter Unicorn Studio Project ID:</label>
+                <input 
+                    type="text" 
+                    id="projectId" 
+                    placeholder="e.g., 8OETB8reudHlzT6Tazpd"
+                    value="8OETB8reudHlzT6Tazpd"
+                >
+                <button onclick="loadCustomProject()">Load Animation</button>
+            </div>
+            <div class="animation-container" style="margin-top: 1rem;">
+                <div id="customAnimation" data-us-project="8OETB8reudHlzT6Tazpd" style="width:100%; height:500px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unicorn Studio Script -->
+    <script type="text/javascript">
+    !function(){
+        if(!window.UnicornStudio){
+            window.UnicornStudio={isInitialized:!1};
+            var i=document.createElement("script");
+            i.src="https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.34/dist/unicornStudio.umd.js",
+            i.onload=function(){
+                window.UnicornStudio.isInitialized||(UnicornStudio.init(),window.UnicornStudio.isInitialized=!0)
+            },
+            (document.head || document.body).appendChild(i)
+        }
+    }();
+
+    // Custom project loader function
+    function loadCustomProject() {
+        const projectId = document.getElementById('projectId').value.trim();
+        const customDiv = document.getElementById('customAnimation');
+        
+        if (!projectId) {
+            alert('Please enter a valid Project ID');
+            return;
+        }
+
+        // Update the data attribute
+        customDiv.setAttribute('data-us-project', projectId);
+        
+        // Reinitialize Unicorn Studio to load the new project
+        if (window.UnicornStudio && window.UnicornStudio.init) {
+            // Remove and recreate the div to force reload
+            const parent = customDiv.parentElement;
+            const newDiv = document.createElement('div');
+            newDiv.id = 'customAnimation';
+            newDiv.setAttribute('data-us-project', projectId);
+            newDiv.style.width = '100%';
+            newDiv.style.height = '500px';
+            
+            parent.removeChild(customDiv);
+            parent.appendChild(newDiv);
+            
+            // Reinitialize
+            window.UnicornStudio.init();
+        }
+    }
+    </script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { Bot, Sparkles, Shield, Zap } from 'lucide-react';
+import UnicornEmbed from './UnicornEmbed';
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -99,7 +100,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
   return (
     <div className="flex flex-col lg:flex-row min-h-screen w-full bg-[#E5E5E5]">
       {/* Left Section - Form */}
-      <div className="w-full lg:flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 overflow-y-auto">
+      <div className="w-full lg:flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 xl:p-16 overflow-y-auto relative z-20">
         <div className="w-full max-w-md my-auto">
           {/* Logo and Header */}
           <div className="mb-4 sm:mb-6 lg:mb-8">
@@ -260,61 +261,13 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         </div>
       </div>
 
-      {/* Right Section - Fun Design Placeholder */}
-      <div className="hidden lg:flex flex-1 items-center justify-center bg-white p-8 xl:p-16 border-l-6 xl:border-l-8 border-black relative overflow-hidden">
-        {/* Placeholder for future design */}
-        <div className="relative z-10 text-center">
-          <div className="mb-8 inline-block">
-            <div className="w-48 h-48 xl:w-64 xl:h-64 bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 rounded-full border-6 xl:border-8 border-black shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] xl:shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] relative">
-              {/* Comic-style decoration dots */}
-              <div className="absolute top-4 right-4 w-3 h-3 xl:w-4 xl:h-4 bg-white border-3 xl:border-4 border-black rounded-full"></div>
-              <div className="absolute top-12 right-8 w-2 h-2 xl:w-3 xl:h-3 bg-white border-3 xl:border-4 border-black rounded-full"></div>
-              <div className="absolute bottom-8 left-8 w-4 h-4 xl:w-5 xl:h-5 bg-yellow-300 border-3 xl:border-4 border-black rounded-full"></div>
-              
-              {/* Center icon */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Sparkles className="w-16 h-16 xl:w-24 xl:h-24 text-white" strokeWidth={3} />
-              </div>
-            </div>
-          </div>
-
-          {/* Comic-style feature badges */}
-          <div className="space-y-5 xl:space-y-6 max-w-sm mx-auto">
-            <div className="bg-yellow-300 border-3 xl:border-4 border-black rounded-lg p-3 xl:p-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] xl:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform rotate-1">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 xl:w-12 xl:h-12 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Zap className="w-5 h-5 xl:w-6 xl:h-6 text-yellow-300" strokeWidth={3} />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-bold text-black text-base xl:text-lg">Lightning Fast</h3>
-                  <p className="text-xs xl:text-sm text-black">Powered by AI</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-300 border-3 xl:border-4 border-black rounded-lg p-3 xl:p-4 shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] xl:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform -rotate-1">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 xl:w-12 xl:h-12 bg-black rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-5 h-5 xl:w-6 xl:h-6 text-blue-300" strokeWidth={3} />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-bold text-black text-base xl:text-lg">Secure & Private</h3>
-                  <p className="text-xs xl:text-sm text-black">Your data is safe</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Background decoration - comic dots pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-6 h-6 xl:w-8 xl:h-8 bg-black rounded-full"></div>
-          <div className="absolute top-40 left-40 w-4 h-4 xl:w-6 xl:h-6 bg-black rounded-full"></div>
-          <div className="absolute bottom-20 right-20 w-6 h-6 xl:w-8 xl:h-8 bg-black rounded-full"></div>
-          <div className="absolute bottom-40 right-40 w-4 h-4 xl:w-6 xl:h-6 bg-black rounded-full"></div>
-          <div className="absolute top-1/2 left-1/4 w-3 h-3 xl:w-4 xl:h-4 bg-black rounded-full"></div>
-          <div className="absolute top-1/3 right-1/3 w-4 h-4 xl:w-5 xl:h-5 bg-black rounded-full"></div>
-        </div>
+      {/* Right Section - Unicorn Animation Only */}
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-white border-l-6 xl:border-l-8 border-black relative overflow-hidden">
+        <UnicornEmbed
+          projectId="8OETB8reudHlzT6Tazpd"
+          width="100%"
+          height="100%"
+        />
       </div>
     </div>
   );
