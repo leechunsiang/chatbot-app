@@ -52,9 +52,10 @@ type Conversation = Database['public']['Tables']['conversations']['Row'];
 
 interface SimplifiedChatProps {
   initialUserId?: string | null;
+  isAuthenticated?: boolean;
 }
 
-export function SimplifiedChat({ initialUserId }: SimplifiedChatProps = {}) {
+export function SimplifiedChat({ initialUserId, isAuthenticated = false }: SimplifiedChatProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -432,12 +433,25 @@ ${context}`
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-20">
                     <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
-                    <p className="text-lg sm:text-xl text-center px-4 font-medium">
-                      Start a conversation with GPT-4.1-nano
-                    </p>
-                    <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
-                      Type a message below to begin
-                    </p>
+                    {!isAuthenticated ? (
+                      <>
+                        <p className="text-lg sm:text-xl text-center px-4 font-medium">
+                          Log in to get started
+                        </p>
+                        <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
+                          Please sign in to start chatting with the AI assistant
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-lg sm:text-xl text-center px-4 font-medium">
+                          Start a conversation with GPT-4.1-nano
+                        </p>
+                        <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
+                          Type a message below to begin
+                        </p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   messages.map((message, index) => (

@@ -120,6 +120,7 @@ export const FadeInDiv = ({
 interface TabItem {
   label: string | React.ReactNode;
   content: React.ReactNode;
+  disabled?: boolean;
 }
 
 interface TabsProps {
@@ -174,20 +175,24 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
                   'bg-orange-500 text-white',
                 ];
                 const activeColor = colors[index % colors.length];
+                const isDisabled = tab.disabled || false;
                 
                 return (
                   <motion.button
                     key={index}
-                    onClick={() => handleTabChange(index)}
-                    onMouseEnter={() => index !== activeTab && setHoveredTab(index)}
+                    onClick={() => !isDisabled && handleTabChange(index)}
+                    onMouseEnter={() => !isDisabled && index !== activeTab && setHoveredTab(index)}
+                    disabled={isDisabled}
                     className={cn(
                       "relative px-6 py-3 text-sm font-bold transition-all rounded-lg border-3 border-black",
-                      activeTab === index
+                      isDisabled
+                        ? 'text-gray-400 bg-gray-200 cursor-not-allowed opacity-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]'
+                        : activeTab === index
                         ? `${activeColor} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`
                         : 'text-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
                     )}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                    whileTap={!isDisabled ? { scale: 0.95 } : {}}
                   >
                     {tab.label}
                   </motion.button>

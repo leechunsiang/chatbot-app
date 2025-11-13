@@ -23,6 +23,7 @@ export function App() {
   const [userId, setUserId] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isPasswordReset, setIsPasswordReset] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
@@ -232,28 +233,16 @@ export function App() {
     );
   }
 
-  // Show auth screen if not authenticated
-  if (!isAuthenticated) {
+  // Show auth screen only if user explicitly requested login
+  if (showAuthModal) {
     return (
       <Auth
         onAuthSuccess={async () => {
           console.log('🔵 Auth success callback triggered');
-          // Don't set loading - let the auth state change handler do it
-          // The auth state change listener will set userId
+          setShowAuthModal(false);
+          // The auth state change listener will handle setting userId and updating state
         }}
       />
-    );
-  }
-
-  // Wait for userId to be loaded before rendering main app
-  if (!userId) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Setting up your session...</p>
-        </div>
-      </div>
     );
   }
 
@@ -266,7 +255,8 @@ export function App() {
           Chatbot
         </span>
       ),
-      content: <SimplifiedChat initialUserId={userId} />,
+      content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} />,
+      disabled: false,
     },
     {
       label: (
@@ -288,6 +278,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
+      disabled: !isAuthenticated,
     },
     {
       label: (
@@ -309,6 +300,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
+      disabled: !isAuthenticated,
     },
     {
       label: (
@@ -334,6 +326,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
+      disabled: !isAuthenticated,
     },
   ];
 
@@ -353,6 +346,7 @@ export function App() {
           </CardContent>
         </Card>
       ),
+      disabled: !isAuthenticated,
     });
   }
 
@@ -369,6 +363,14 @@ export function App() {
               isAuthenticated={isAuthenticated}
               userEmail={userEmail}
               onAuthRequired={async () => {
+                if (!isAuthenticated) {
+                  // User wants to log in - show auth modal
+                  console.log('🔑 User requested login');
+                  setShowAuthModal(true);
+                  return;
+                }
+
+                // User is authenticated and wants to log out
                 console.log('🚪 onAuthRequired called - logging out');
 
                 try {
