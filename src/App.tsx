@@ -24,6 +24,7 @@ export function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isPasswordReset, setIsPasswordReset] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userFirstName, setUserFirstName] = useState<string>('');
 
   const ensureUserAndFetchRole = async (userId: string, email: string): Promise<UserRole> => {
     try {
@@ -32,10 +33,10 @@ export function App() {
 
       await ensureUserExists(userId, email);
 
-      // Fetch user profile with role
+      // Fetch user profile with role and first name
       const { data: profile, error } = await supabase
         .from('users')
-        .select('role')
+        .select('role, first_name')
         .eq('id', userId)
         .maybeSingle();
 
@@ -44,9 +45,12 @@ export function App() {
         return 'employee';
       }
 
-      if (profile?.role) {
+      if (profile) {
         console.log('✅ User role:', profile.role);
-        return profile.role as UserRole;
+        if (profile.first_name) {
+          setUserFirstName(profile.first_name);
+        }
+        return (profile.role as UserRole) || 'employee';
       }
 
       console.log('⚠️ No user profile found, defaulting to employee');
@@ -115,6 +119,7 @@ export function App() {
           if (mounted) {
             setUserId(null);
             setUserEmail('');
+            setUserFirstName('');
           }
         }
       } catch (err) {
@@ -152,6 +157,7 @@ export function App() {
           setUserId(null);
           setUserEmail('');
           setUserRole('employee');
+          setUserFirstName('');
           setAuthError(null);
           return;
         }
@@ -358,6 +364,7 @@ export function App() {
           tabs={tabs} 
           defaultActive={0} 
           className="h-full"
+          userName={userFirstName}
           actions={
             <UserMenu
               isAuthenticated={isAuthenticated}
@@ -379,6 +386,7 @@ export function App() {
                   setUserId(null);
                   setUserEmail('');
                   setUserRole('employee');
+                  setUserFirstName('');
 
                   // Then sign out from Supabase
                   const { error } = await supabase.auth.signOut({ scope: 'global' });

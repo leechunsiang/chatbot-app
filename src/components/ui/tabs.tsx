@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Bot } from "lucide-react";
+import { TypewriterText } from "./typewriter-text";
 
 type Tab = {
   title: string;
@@ -128,9 +129,10 @@ interface TabsProps {
   defaultActive?: number;
   className?: string;
   actions?: React.ReactNode;
+  userName?: string;
 }
 
-export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsProps) => {
+export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, userName }: TabsProps) => {
   const [activeTab, setActiveTab] = useState(defaultActive);
   const [hoveredTab, setHoveredTab] = useState<number | null>(null);
   const [previousTab, setPreviousTab] = useState(defaultActive);
@@ -156,9 +158,14 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions }: TabsP
         onMouseLeave={() => setHoveredTab(null)}
       >
         <div className="flex items-center justify-between w-full">
-          {/* Robot Logo on Far Left */}
-          <div className="flex items-center z-40">
+          {/* Robot Logo on Far Left with Welcome Message */}
+          <div className="flex items-center gap-3 z-40">
             <Bot className="h-10 w-10 text-black" strokeWidth={2.5} />
+            {userName && (
+              <div className="text-xl font-bold text-black">
+                <TypewriterText text={`Hi! ${userName}`} speed={80} />
+              </div>
+            )}
           </div>
 
           {/* Tab Navigation and User Menu on Right */}
