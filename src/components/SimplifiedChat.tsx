@@ -426,8 +426,8 @@ ${context}`
           )}
 
           {/* Messages Area */}
-          <div className="flex-1 min-h-0 border border-border/40 rounded-2xl bg-slate-100/80 dark:bg-slate-800/70 backdrop-blur-sm overflow-hidden shadow-lg mb-6 flex-shrink z-20">
-            <ScrollArea className="h-full bg-slate-50/70 dark:bg-slate-900/40">
+          <div className="flex-1 min-h-0 rounded-2xl overflow-hidden mb-6 flex-shrink z-20 bg-transparent">
+            <ScrollArea className="h-full bg-transparent">
               <div className="p-6 sm:p-8 space-y-6 min-h-full">
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-20">
@@ -535,11 +535,6 @@ ${context}`
               </Button>
             </div>
           </form>
-
-          {/* Footer */}
-          <div className="mt-4 text-center text-xs sm:text-sm text-muted-foreground flex-shrink-0">
-            Powered by GPT-4.1-nano via GitHub Models
-          </div>
         </div>
       </div>
     </div>
