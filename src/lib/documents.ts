@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { uploadDocument, deleteDocument as deleteStorageDocument } from './storage';
 import { logActivity } from './activities';
-import { extractTextFromPDF, processDocumentForRAG } from './rag';
+import { extractTextFromDocument, processDocumentForRAG } from './rag';
 
 export interface PolicyDocument {
   id: string;
@@ -140,8 +140,16 @@ export async function createPolicyDocument(
       );
     }
 
-    if (file.type === 'application/pdf' && metadata.status === 'published') {
-      processDocumentAsync(data.id, uploadResult.path).catch(error => {
+    // Process document for RAG if published (supports PDF, Word, TXT)
+    const supportedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+      'text/plain'
+    ];
+    
+    if (supportedTypes.includes(file.type) && metadata.status === 'published') {
+      processDocumentAsync(data.id, uploadResult.path, file.type).catch(error => {
         console.error('Background processing error:', error);
       });
     }
@@ -250,18 +258,19 @@ export async function getDocumentStats() {
 /**
  * Process document asynchronously in the background
  */
-async function processDocumentAsync(documentId: string, filePath: string): Promise<void> {
+async function processDocumentAsync(documentId: string, filePath: string, fileType: string): Promise<void> {
   try {
     await supabase
       .from('policy_documents')
       .update({ processing_status: 'processing' })
       .eq('id', documentId);
 
-    console.log('📄 Extracting text from PDF using Edge Function...');
+    console.log(`📄 Extracting text from document (${fileType})...`);
 
-    const result = await extractTextFromPDF(filePath, documentId);
+    const result = await extractTextFromDocument(filePath, fileType, documentId);
 
-    console.log(`✅ Text extracted: ${result.text.length} characters from ${result.metadata.pages} pages`);
+    const pagesInfo = result.metadata.pages ? ` from ${result.metadata.pages} pages` : '';
+    console.log(`✅ Text extracted: ${result.text.length} characters${pagesInfo}`);
 
     await processDocumentForRAG(documentId, result.text);
 
@@ -299,11 +308,18 @@ export async function reprocessDocument(documentId: string): Promise<void> {
     const document = await getPolicyDocument(documentId);
     if (!document) throw new Error('Document not found');
 
-    if (document.file_type !== 'application/pdf') {
-      throw new Error('Only PDF documents can be reprocessed');
+    const supportedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+      'text/plain'
+    ];
+
+    if (!supportedTypes.includes(document.file_type)) {
+      throw new Error('This document type cannot be reprocessed');
     }
 
-    await processDocumentAsync(documentId, document.file_path);
+    await processDocumentAsync(documentId, document.file_path, document.file_type);
   } catch (error) {
     console.error('Error reprocessing document:', error);
     throw error;

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { UserMenu } from '@/components/UserMenu';
+import { DocumentUpload } from '@/components/DocumentUpload';
+import { DocumentsView } from '@/components/DocumentsView';
 import { supabase } from '@/lib/supabase';
 import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,6 +37,8 @@ export function Dashboard() {
   const [userToRemove, setUserToRemove] = useState<{ id: string; name: string } | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showDocumentsView, setShowDocumentsView] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -689,10 +693,17 @@ export function Dashboard() {
                 className="w-full bg-yellow-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
                 📝 Manage Users
               </button>
-              <button className="w-full bg-pink-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
+              <button 
+                onClick={() => setShowUploadModal(true)}
+                className="w-full bg-pink-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
                 📄 Upload Document
               </button>
-              <button className="w-full bg-green-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
+              <button 
+                onClick={() => setShowDocumentsView(true)}
+                className="w-full bg-green-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
+                📚 View Documents
+              </button>
+              <button className="w-full bg-yellow-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
                 ❓ Edit FAQs
               </button>
               <button className="w-full bg-blue-400 border-3 border-black rounded-lg px-4 py-3 font-black text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all text-left">
@@ -1038,6 +1049,28 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Upload Document Modal */}
+      {showUploadModal && (
+        <DocumentUpload
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => {
+            setToast({ message: 'Document uploaded successfully! Processing for AI...', type: 'success' });
+            fetchActivities();
+          }}
+        />
+      )}
+
+      {/* Documents View Modal */}
+      {showDocumentsView && (
+        <DocumentsView
+          onClose={() => setShowDocumentsView(false)}
+          onUploadClick={() => {
+            setShowDocumentsView(false);
+            setShowUploadModal(true);
+          }}
+        />
       )}
     </div>
   );

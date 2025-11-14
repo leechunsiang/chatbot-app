@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import OpenAI from 'openai';
+import mammoth from 'mammoth';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -198,6 +199,102 @@ export async function extractTextFromPDF(
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
     throw error;
+  }
+}
+
+/**
+ * Extract text from Word document (.docx)
+ */
+export async function extractTextFromWord(
+  filePath: string
+): Promise<{ text: string; metadata: { length: number } }> {
+  try {
+    console.log('📄 Extracting text from Word document...');
+
+    // Download the file from Supabase storage
+    const { data: fileData, error: downloadError } = await supabase
+      .storage
+      .from('policy-documents')
+      .download(filePath);
+
+    if (downloadError || !fileData) {
+      throw new Error(`Failed to download Word document: ${downloadError?.message}`);
+    }
+
+    // Convert Blob to ArrayBuffer
+    const arrayBuffer = await fileData.arrayBuffer();
+
+    // Extract text using mammoth
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    const text = result.value.trim();
+
+    console.log(`✅ Text extracted from Word: ${text.length} characters`);
+
+    return {
+      text,
+      metadata: { length: text.length },
+    };
+  } catch (error) {
+    console.error('Error extracting text from Word:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract text from TXT file
+ */
+export async function extractTextFromTxt(
+  filePath: string
+): Promise<{ text: string; metadata: { length: number } }> {
+  try {
+    console.log('📄 Extracting text from TXT file...');
+
+    // Download the file from Supabase storage
+    const { data: fileData, error: downloadError } = await supabase
+      .storage
+      .from('policy-documents')
+      .download(filePath);
+
+    if (downloadError || !fileData) {
+      throw new Error(`Failed to download TXT file: ${downloadError?.message}`);
+    }
+
+    // Convert Blob to text
+    const text = await fileData.text();
+
+    console.log(`✅ Text extracted from TXT: ${text.length} characters`);
+
+    return {
+      text,
+      metadata: { length: text.length },
+    };
+  } catch (error) {
+    console.error('Error extracting text from TXT:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract text from any supported document type
+ */
+export async function extractTextFromDocument(
+  filePath: string,
+  fileType: string,
+  documentId: string
+): Promise<{ text: string; metadata: any }> {
+  console.log(`📄 Processing document: ${filePath} (${fileType})`);
+
+  if (fileType === 'application/pdf') {
+    return await extractTextFromPDF(filePath, documentId);
+  } else if (
+    fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    fileType === 'application/msword'
+  ) {
+    return await extractTextFromWord(filePath);
+  } else if (fileType === 'text/plain') {
+    return await extractTextFromTxt(filePath);
+  } else {
+    throw new Error(`Unsupported file type: ${fileType}`);
   }
 }
 
