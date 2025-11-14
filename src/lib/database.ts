@@ -1,5 +1,6 @@
 import { supabase } from './supabase.ts';
 import type { Database } from './database.types.ts';
+import { logActivity } from './activities';
 
 type Conversation = Database['public']['Tables']['conversations']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
@@ -123,6 +124,29 @@ export async function createConversation(userId: string, title: string = 'New Ch
   }
 
   console.log('✅ Conversation created successfully:', data);
+
+  // Log activity if user has organization
+  try {
+    const { data: orgData } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (orgData?.organization_id) {
+      await logActivity(
+        orgData.organization_id,
+        userId,
+        'conversation_started',
+        'New conversation started',
+        {}
+      );
+    }
+  } catch (activityError) {
+    console.error('Error logging activity:', activityError);
+    // Don't fail the conversation creation if activity logging fails
+  }
+
   return data as Conversation;
 }
 

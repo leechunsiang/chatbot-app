@@ -3,6 +3,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { getRecentActivities, formatRelativeTime, getActivityColor, logActivity, type Activity } from '@/lib/activities';
 
 export function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -32,6 +33,8 @@ export function Dashboard() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userToRemove, setUserToRemove] = useState<{ id: string; name: string } | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -123,6 +126,29 @@ export function Dashboard() {
     }
   }, [toast]);
 
+  // Fetch activities when organization changes
+  useEffect(() => {
+    if (userOrganizationId) {
+      fetchActivities();
+    }
+  }, [userOrganizationId]);
+
+  const fetchActivities = async () => {
+    if (!userOrganizationId) return;
+
+    setIsLoadingActivities(true);
+    try {
+      const { data, error } = await getRecentActivities(userOrganizationId, 10);
+      if (error) {
+        console.error('Error fetching activities:', error);
+      } else {
+        setActivities(data || []);
+      }
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -164,6 +190,15 @@ export function Dashboard() {
         }]);
 
       if (memberError) throw memberError;
+
+      // Log activity
+      await logActivity(
+        orgData.id,
+        userId,
+        'organization_created',
+        `Organization "${organizationName}" was created`,
+        { organizationName: organizationName }
+      );
 
       setToast({ message: `Organization "${organizationName}" created successfully!`, type: 'success' });
       
@@ -255,6 +290,19 @@ export function Dashboard() {
 
       console.log('User added successfully');
 
+      // Log activity
+      await logActivity(
+        userOrganizationId,
+        userId,
+        'user_added',
+        `${selectedUser.name} was added to the organization`,
+        { 
+          userName: selectedUser.name,
+          userEmail: selectedUser.email,
+          role: selectedRole
+        }
+      );
+
       // Show success feedback
       const roleName = selectedRole.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
       setToast({ message: `Successfully added ${selectedUser.name} to your organization as ${roleName}!`, type: 'success' });
@@ -264,8 +312,9 @@ export function Dashboard() {
       setSelectedUser(null);
       setSelectedRole('employee');
       
-      // Always refresh members list after adding
+      // Always refresh members list and activities after adding
       await fetchOrganizationMembers();
+      await fetchActivities();
     } catch (error: any) {
       console.error('Error adding user:', error);
       setToast({ message: `Failed to add user: ${error.message || 'Unknown error'}`, type: 'error' });
@@ -354,10 +403,22 @@ export function Dashboard() {
 
       if (error) throw error;
 
+      // Log activity
+      if (userOrganizationId) {
+        await logActivity(
+          userOrganizationId,
+          userId,
+          'user_removed',
+          `${userToRemove.name} was removed from the organization`,
+          { userName: userToRemove.name }
+        );
+      }
+
       setToast({ message: 'Successfully removed user from your organization!', type: 'success' });
       setShowConfirmModal(false);
       setUserToRemove(null);
       fetchOrganizationMembers();
+      fetchActivities();
     } catch (error: any) {
       console.error('Error removing user:', error);
       setToast({ message: `Failed to remove user: ${error.message}`, type: 'error' });
@@ -589,24 +650,31 @@ export function Dashboard() {
           {/* Recent Activity */}
           <div className="lg:col-span-2 bg-white border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <h3 className="text-2xl font-black text-black mb-6">Recent Activity</h3>
-            <div className="space-y-4">
-              {[
-                { action: 'New user registered', user: 'john.doe@company.com', time: '5 minutes ago', color: 'bg-blue-200' },
-                { action: 'Document uploaded', user: 'hr.admin@company.com', time: '1 hour ago', color: 'bg-green-200' },
-                { action: 'FAQ updated', user: 'manager@company.com', time: '2 hours ago', color: 'bg-yellow-200' },
-                { action: 'Conversation started', user: 'employee@company.com', time: '3 hours ago', color: 'bg-pink-200' },
-              ].map((activity, index) => (
-                <div key={index} className={`${activity.color} border-3 border-black rounded-lg p-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-black text-black">{activity.action}</p>
-                      <p className="text-sm font-bold text-black/70">{activity.user}</p>
+            {isLoadingActivities ? (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-black/50 font-bold">Loading activities...</p>
+              </div>
+            ) : activities.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-black/50 font-bold">No recent activities</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {activities.map((activity) => (
+                  <div key={activity.id} className={`${getActivityColor(activity.action_type)} border-3 border-black rounded-lg p-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-black text-black">{activity.description}</p>
+                        {activity.metadata?.userEmail && (
+                          <p className="text-sm font-bold text-black/70">{activity.metadata.userEmail}</p>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-black/50">{formatRelativeTime(activity.created_at)}</span>
                     </div>
-                    <span className="text-xs font-bold text-black/50">{activity.time}</span>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Quick Actions */}

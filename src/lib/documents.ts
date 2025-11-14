@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { uploadDocument, deleteDocument as deleteStorageDocument } from './storage';
+import { logActivity } from './activities';
 import { extractTextFromPDF, processDocumentForRAG } from './rag';
 
 export interface PolicyDocument {
@@ -122,6 +123,23 @@ export async function createPolicyDocument(
 
     if (error) throw error;
 
+    // Log activity if user has organization
+    const { data: orgData } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (orgData?.organization_id) {
+      await logActivity(
+        orgData.organization_id,
+        user.id,
+        'document_uploaded',
+        `Document "${metadata.title}" was uploaded`,
+        { documentName: metadata.title, fileName: file.name }
+      );
+    }
+
     if (file.type === 'application/pdf' && metadata.status === 'published') {
       processDocumentAsync(data.id, uploadResult.path).catch(error => {
         console.error('Background processing error:', error);
@@ -163,6 +181,8 @@ export async function updatePolicyDocument(
  */
 export async function deletePolicyDocument(id: string): Promise<void> {
   try {
+    const user = (await supabase.auth.getUser()).data.user;
+    
     // Get document to get file path
     const document = await getPolicyDocument(id);
     if (!document) throw new Error('Document not found');
@@ -177,6 +197,25 @@ export async function deletePolicyDocument(id: string): Promise<void> {
       .eq('id', id);
 
     if (error) throw error;
+
+    // Log activity if user has organization
+    if (user) {
+      const { data: orgData } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (orgData?.organization_id) {
+        await logActivity(
+          orgData.organization_id,
+          user.id,
+          'document_deleted',
+          `Document "${document.title}" was deleted`,
+          { documentName: document.title }
+        );
+      }
+    }
   } catch (error) {
     console.error('Error deleting policy document:', error);
     throw error;
