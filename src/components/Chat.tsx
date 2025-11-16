@@ -34,6 +34,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -72,6 +73,22 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
         console.log('✅ Chat session loaded for user:', session.user.id);
         setUserId(session.user.id);
+
+        // Get user's current organization
+        try {
+          const { data: orgData } = await supabase
+            .from('organization_users')
+            .select('organization_id')
+            .eq('user_id', session.user.id)
+            .single();
+          
+          if (orgData?.organization_id) {
+            setOrganizationId(orgData.organization_id);
+            console.log('✅ User organization:', orgData.organization_id);
+          }
+        } catch (orgErr) {
+          console.warn('⚠️ Could not load user organization:', orgErr);
+        }
 
         // Try to ensure user exists, but don't fail if table doesn't exist
         try {
@@ -421,11 +438,16 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
         await updateConversationTitleFromFirstMessage(userMessageContent);
       }
 
-      // Search for relevant document chunks
+      // Search for relevant document chunks from user's organization
       let context = '';
       try {
         console.log('🔍 Searching for relevant policy documents...');
-        const relevantChunks = await searchDocumentChunks(userMessageContent, 0.5, 5);
+        const relevantChunks = await searchDocumentChunks(
+          userMessageContent, 
+          0.5, 
+          5,
+          organizationId || undefined
+        );
 
         if (relevantChunks.length > 0) {
           context = buildContextFromChunks(relevantChunks);

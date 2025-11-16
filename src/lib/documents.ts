@@ -17,6 +17,7 @@ export interface PolicyDocument {
   status: 'draft' | 'published' | 'archived';
   is_enabled: boolean;
   uploaded_by: string | null;
+  organization_id: string | null;
   created_at: string;
   updated_at: string;
   processing_status?: 'pending' | 'processing' | 'completed' | 'failed';
@@ -100,10 +101,21 @@ export async function createPolicyDocument(
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) throw new Error('User not authenticated');
 
+    // Get user's current organization
+    const { data: orgData } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!orgData?.organization_id) {
+      throw new Error('User must belong to an organization to upload documents');
+    }
+
     // Upload file to storage
     const uploadResult = await uploadDocument(file, { onProgress });
 
-    // Create database record
+    // Create database record with organization_id
     const { data, error } = await supabase
       .from('policy_documents')
       .insert({
@@ -117,18 +129,12 @@ export async function createPolicyDocument(
         tags: metadata.tags || [],
         status: metadata.status || 'draft',
         uploaded_by: user.id,
+        organization_id: orgData.organization_id,
       })
       .select()
       .single();
 
     if (error) throw error;
-
-    // Log activity if user has organization
-    const { data: orgData } = await supabase
-      .from('organization_users')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
 
     if (orgData?.organization_id) {
       await logActivity(

@@ -101,15 +101,18 @@ export async function processDocumentForRAG(
 
 /**
  * Search for relevant document chunks based on a query
+ * Filters by user's current organization
  */
 export async function searchDocumentChunks(
   query: string,
   matchThreshold: number = 0.5,
-  matchCount: number = 5
+  matchCount: number = 5,
+  organizationId?: string
 ): Promise<DocumentChunk[]> {
   try {
     console.log('🔍 RAG Search - Query:', query);
     console.log('🔍 RAG Search - Threshold:', matchThreshold, 'Count:', matchCount);
+    console.log('🔍 RAG Search - Organization:', organizationId || 'all');
 
     const queryEmbedding = await createEmbedding(query);
     console.log('✅ RAG Search - Query embedding created:', queryEmbedding.length, 'dimensions');
@@ -118,6 +121,7 @@ export async function searchDocumentChunks(
       query_embedding: queryEmbedding,
       match_threshold: matchThreshold,
       match_count: matchCount,
+      filter_organization_id: organizationId || null,
     });
 
     if (error) {
