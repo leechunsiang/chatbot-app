@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FocusEvent } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { User, LogIn, LogOut, UserPlus, Smile, Frown, LayoutDashboard } from 'lucide-react';
+import { LogIn, LogOut, UserPlus, Smile, Frown, LayoutDashboard } from 'lucide-react';
 
 interface UserMenuProps {
   isAuthenticated: boolean;

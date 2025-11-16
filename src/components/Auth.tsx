@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
-import { Bot, Sparkles, Shield, Zap } from 'lucide-react';
+import { Bot, Building2, X, Search } from 'lucide-react';
 import UnicornEmbed from './UnicornEmbed';
 import { ForgotPassword } from './ForgotPassword';
+import { searchOrganizations, createOrganization, addUserToOrganization } from '@/lib/database';
 
 interface AuthProps {
   onAuthSuccess: () => void;
@@ -21,10 +22,97 @@ export function Auth({ onAuthSuccess }: AuthProps) {
   const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
+  // Organization search states
+  const [orgSearchQuery, setOrgSearchQuery] = useState('');
+  const [orgSearchResults, setOrgSearchResults] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedOrg, setSelectedOrg] = useState<{ id: string; name: string } | null>(null);
+  const [showOrgDropdown, setShowOrgDropdown] = useState(false);
+  const [isSearchingOrgs, setIsSearchingOrgs] = useState(false);
+  const [isCreatingNewOrg, setIsCreatingNewOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const orgDropdownRef = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Show forgot password page
   if (showForgotPassword) {
     return <ForgotPassword />;
   }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(event.target as Node)) {
+        setShowOrgDropdown(false);
+      }
+    };
+
+    if (showOrgDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showOrgDropdown]);
+
+  // Debounced organization search
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!isCreatingNewOrg && orgSearchQuery.trim().length >= 2) {
+      setIsSearchingOrgs(true);
+      setShowOrgDropdown(true);
+
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const results = await searchOrganizations(orgSearchQuery);
+          setOrgSearchResults(results);
+        } catch (error) {
+          console.error('Error searching organizations:', error);
+          setOrgSearchResults([]);
+        } finally {
+          setIsSearchingOrgs(false);
+        }
+      }, 300);
+    } else {
+      setOrgSearchResults([]);
+      if (!isCreatingNewOrg) {
+        setShowOrgDropdown(false);
+      }
+    }
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [orgSearchQuery, isCreatingNewOrg]);
+
+  // Handle organization selection
+  const handleSelectOrg = (org: { id: string; name: string }) => {
+    setSelectedOrg(org);
+    setOrgSearchQuery(org.name);
+    setShowOrgDropdown(false);
+  };
+
+  // Handle clearing organization selection
+  const handleClearOrgSelection = () => {
+    setSelectedOrg(null);
+    setOrgSearchQuery('');
+    setIsCreatingNewOrg(false);
+    setNewOrgName('');
+  };
+
+  // Toggle create new organization mode
+  const handleToggleCreateMode = () => {
+    setIsCreatingNewOrg(!isCreatingNewOrg);
+    if (!isCreatingNewOrg) {
+      setOrgSearchQuery('');
+      setSelectedOrg(null);
+      setShowOrgDropdown(false);
+    } else {
+      setNewOrgName('');
+    }
+  };
 
   // Password strength calculation
   const calculatePasswordStrength = (pwd: string): { strength: number; label: string; color: string } => {
@@ -98,6 +186,28 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
           if (profileError) {
             console.error('Error updating user profile:', profileError);
+          }
+
+          // Handle organization creation or joining
+          try {
+            if (isCreatingNewOrg && newOrgName.trim()) {
+              // Create new organization
+              const newOrg = await createOrganization(newOrgName);
+              // Add user as manager
+              await addUserToOrganization(authData.user.id, newOrg.id, 'manager');
+              console.log('Created and joined new organization:', newOrg.name);
+            } else if (selectedOrg) {
+              // Join existing organization
+              await addUserToOrganization(authData.user.id, selectedOrg.id, 'employee');
+              console.log('Joined organization:', selectedOrg.name);
+            }
+          } catch (orgError: any) {
+            console.error('Error handling organization:', orgError);
+            // Don't fail signup if organization step fails
+            setMessage({
+              type: 'success',
+              text: 'Account created successfully, but there was an issue with the organization. You can join one later.'
+            });
           }
         }
 
@@ -259,6 +369,125 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                 </div>
               )}
 
+              {/* Organization Section - Only show during sign up */}
+              {isSignUp && (
+                <div className="space-y-1 sm:space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="block text-sm font-bold text-black">
+                      Join Organization
+                    </label>
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-gray-700 bg-gray-200 border-2 border-black rounded">
+                      Optional
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Search for your organization or create a new one. You can skip this step.
+                  </p>
+
+                  {selectedOrg ? (
+                    // Selected organization display
+                    <div className="flex items-center gap-2 p-3 bg-green-50 border-3 border-green-600 rounded-lg shadow-[3px_3px_0px_0px_rgba(22,163,74,1)]">
+                      <Building2 className="w-5 h-5 text-green-700" />
+                      <span className="flex-1 text-sm font-bold text-green-900">{selectedOrg.name}</span>
+                      <button
+                        type="button"
+                        onClick={handleClearOrgSelection}
+                        disabled={isLoading}
+                        className="p-1 hover:bg-green-200 rounded transition-colors"
+                      >
+                        <X className="w-4 h-4 text-green-700" />
+                      </button>
+                    </div>
+                  ) : isCreatingNewOrg ? (
+                    // Create new organization input
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <Input
+                          type="text"
+                          placeholder="Enter new organization name"
+                          value={newOrgName}
+                          onChange={(e) => setNewOrgName(e.target.value)}
+                          disabled={isLoading}
+                          className="h-10 sm:h-11 text-sm text-black font-medium placeholder:text-gray-600 bg-white border-3 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleToggleCreateMode}
+                        disabled={isLoading}
+                        className="text-xs font-bold text-black hover:underline"
+                      >
+                        Back to search
+                      </button>
+                    </div>
+                  ) : (
+                    // Organization search input with dropdown
+                    <div className="relative" ref={orgDropdownRef}>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-600" />
+                        <Input
+                          type="text"
+                          placeholder="Search for your organization"
+                          value={orgSearchQuery}
+                          onChange={(e) => setOrgSearchQuery(e.target.value)}
+                          disabled={isLoading}
+                          className="h-10 sm:h-11 pl-10 text-sm text-black font-medium placeholder:text-gray-600 bg-white border-3 border-black rounded-lg shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] focus:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 caret-black [caret-shape:block] transition-all"
+                        />
+                      </div>
+
+                      {/* Dropdown */}
+                      {showOrgDropdown && (
+                        <div className="absolute z-50 w-full mt-2 bg-white border-3 border-black rounded-lg shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-60 overflow-y-auto">
+                          {isSearchingOrgs ? (
+                            <div className="p-4 text-center text-sm text-gray-600">
+                              Searching...
+                            </div>
+                          ) : orgSearchResults.length > 0 ? (
+                            <div className="py-2">
+                              {orgSearchResults.map((org) => (
+                                <button
+                                  key={org.id}
+                                  type="button"
+                                  onClick={() => handleSelectOrg(org)}
+                                  className="w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-yellow-100 transition-colors flex items-center gap-2"
+                                >
+                                  <Building2 className="w-4 h-4" />
+                                  {org.name}
+                                </button>
+                              ))}
+                            </div>
+                          ) : orgSearchQuery.trim().length >= 2 ? (
+                            <div className="p-4 text-center text-sm text-gray-600">
+                              No organizations found
+                            </div>
+                          ) : null}
+
+                          {/* Action buttons */}
+                          <div className="border-t-3 border-black p-2 space-y-1">
+                            <button
+                              type="button"
+                              onClick={handleToggleCreateMode}
+                              disabled={isLoading}
+                              className="w-full px-4 py-2 text-sm font-bold text-black bg-[#FFDF20] border-2 border-black rounded hover:bg-yellow-300 transition-colors flex items-center justify-center gap-2"
+                            >
+                              <Building2 className="w-4 h-4" />
+                              Create New Organization
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowOrgDropdown(false)}
+                              className="w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              Skip for now
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!isSignUp && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs sm:text-sm">
                   <label className="flex items-center space-x-2 cursor-pointer">
@@ -308,6 +537,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                   setPassword('');
                   setFirstName('');
                   setLastName('');
+                  handleClearOrgSelection();
                 }}
                 className="font-bold text-black hover:underline"
                 disabled={isLoading}

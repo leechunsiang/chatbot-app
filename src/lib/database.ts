@@ -418,3 +418,89 @@ export function formatMessage(message: Message) {
     createdAt: new Date(message.created_at)
   };
 }
+
+// ==================== ORGANIZATION OPERATIONS ====================
+
+/**
+ * Search organizations by name with partial matching
+ */
+export async function searchOrganizations(searchQuery: string, limit: number = 10) {
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, name')
+    .ilike('name', `%${searchQuery.trim()}%`)
+    .limit(limit);
+
+  if (error) {
+    console.error('Error searching organizations:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+/**
+ * Get organization by ID
+ */
+export async function getOrganizationById(organizationId: string) {
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, name')
+    .eq('id', organizationId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching organization:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Create a new organization
+ */
+export async function createOrganization(name: string) {
+  const { data, error } = await supabase
+    .from('organizations')
+    .insert({ name: name.trim() })
+    .select('id, name')
+    .single();
+
+  if (error) {
+    console.error('Error creating organization:', error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Add user to organization with specified role
+ */
+export async function addUserToOrganization(
+  userId: string,
+  organizationId: string,
+  role: 'employee' | 'manager' | 'hr_admin' = 'employee'
+) {
+  const { data, error } = await supabase
+    .from('organization_users')
+    .insert({
+      user_id: userId,
+      organization_id: organizationId,
+      role: role
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error adding user to organization:', error);
+    throw error;
+  }
+
+  return data;
+}
