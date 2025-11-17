@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Bot, ArrowLeft, Users, MessageSquare, FileText, TrendingUp, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getRecentActivities, formatRelativeTime, getActivityColor, logActivity, type Activity } from '@/lib/activities';
+import { getDashboardMetrics, formatMetricChange, formatPercentageChange, type DashboardMetrics } from '@/lib/dashboardMetrics';
 
 export function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -39,6 +40,17 @@ export function Dashboard() {
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDocumentsView, setShowDocumentsView] = useState(false);
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    totalUsers: 0,
+    userGrowthThisWeek: 0,
+    conversations: 0,
+    conversationsThisWeek: 0,
+    documents: 0,
+    documentsUpdatedThisWeek: 0,
+    engagementRate: 0,
+    engagementChangeThisWeek: 0,
+  });
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -130,10 +142,11 @@ export function Dashboard() {
     }
   }, [toast]);
 
-  // Fetch activities when organization changes
+  // Fetch activities and metrics when organization changes
   useEffect(() => {
     if (userOrganizationId) {
       fetchActivities();
+      fetchMetrics();
     }
   }, [userOrganizationId]);
 
@@ -150,6 +163,20 @@ export function Dashboard() {
       }
     } finally {
       setIsLoadingActivities(false);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    if (!userOrganizationId) return;
+
+    setIsLoadingMetrics(true);
+    try {
+      const metricsData = await getDashboardMetrics(userOrganizationId);
+      setMetrics(metricsData);
+    } catch (error) {
+      console.error('Error fetching dashboard metrics:', error);
+    } finally {
+      setIsLoadingMetrics(false);
     }
   };
 
@@ -316,9 +343,10 @@ export function Dashboard() {
       setSelectedUser(null);
       setSelectedRole('employee');
       
-      // Always refresh members list and activities after adding
+      // Always refresh members list, activities and metrics after adding
       await fetchOrganizationMembers();
       await fetchActivities();
+      await fetchMetrics();
     } catch (error: any) {
       console.error('Error adding user:', error);
       setToast({ message: `Failed to add user: ${error.message || 'Unknown error'}`, type: 'error' });
@@ -423,6 +451,7 @@ export function Dashboard() {
       setUserToRemove(null);
       fetchOrganizationMembers();
       fetchActivities();
+      fetchMetrics();
     } catch (error: any) {
       console.error('Error removing user:', error);
       setToast({ message: `Failed to remove user: ${error.message}`, type: 'error' });
@@ -612,40 +641,56 @@ export function Dashboard() {
           <div className="bg-yellow-400 border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
             <div className="flex items-center justify-between mb-4">
               <Users className="h-10 w-10 text-black" strokeWidth={2.5} />
-              <span className="text-3xl font-black text-black">156</span>
+              <span className="text-3xl font-black text-black">
+                {isLoadingMetrics ? '...' : metrics.totalUsers}
+              </span>
             </div>
             <h3 className="text-lg font-black text-black">Total Users</h3>
-            <p className="text-sm font-bold text-black/70">+12 this month</p>
+            <p className="text-sm font-bold text-black/70">
+              {isLoadingMetrics ? 'Loading...' : formatMetricChange(metrics.userGrowthThisWeek, ' this week')}
+            </p>
           </div>
 
           {/* Active Conversations Card */}
           <div className="bg-pink-400 border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
             <div className="flex items-center justify-between mb-4">
               <MessageSquare className="h-10 w-10 text-black" strokeWidth={2.5} />
-              <span className="text-3xl font-black text-black">1,234</span>
+              <span className="text-3xl font-black text-black">
+                {isLoadingMetrics ? '...' : metrics.conversations.toLocaleString()}
+              </span>
             </div>
             <h3 className="text-lg font-black text-black">Conversations</h3>
-            <p className="text-sm font-bold text-black/70">+89 today</p>
+            <p className="text-sm font-bold text-black/70">
+              {isLoadingMetrics ? 'Loading...' : formatMetricChange(metrics.conversationsThisWeek, ' this week')}
+            </p>
           </div>
 
           {/* Documents Card */}
           <div className="bg-green-400 border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
             <div className="flex items-center justify-between mb-4">
               <FileText className="h-10 w-10 text-black" strokeWidth={2.5} />
-              <span className="text-3xl font-black text-black">42</span>
+              <span className="text-3xl font-black text-black">
+                {isLoadingMetrics ? '...' : metrics.documents}
+              </span>
             </div>
             <h3 className="text-lg font-black text-black">Documents</h3>
-            <p className="text-sm font-bold text-black/70">5 updated</p>
+            <p className="text-sm font-bold text-black/70">
+              {isLoadingMetrics ? 'Loading...' : `${metrics.documentsUpdatedThisWeek} updated this week`}
+            </p>
           </div>
 
           {/* Engagement Card */}
           <div className="bg-purple-400 border-4 border-black rounded-xl p-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] transition-all">
             <div className="flex items-center justify-between mb-4">
               <TrendingUp className="h-10 w-10 text-black" strokeWidth={2.5} />
-              <span className="text-3xl font-black text-black">94%</span>
+              <span className="text-3xl font-black text-black">
+                {isLoadingMetrics ? '...' : `${metrics.engagementRate}%`}
+              </span>
             </div>
             <h3 className="text-lg font-black text-black">Engagement</h3>
-            <p className="text-sm font-bold text-black/70">+8% from last week</p>
+            <p className="text-sm font-bold text-black/70">
+              {isLoadingMetrics ? 'Loading...' : formatPercentageChange(metrics.engagementChangeThisWeek)}
+            </p>
           </div>
         </div>
 
@@ -1058,6 +1103,7 @@ export function Dashboard() {
           onSuccess={() => {
             setToast({ message: 'Document uploaded successfully! Processing for AI...', type: 'success' });
             fetchActivities();
+            fetchMetrics();
           }}
         />
       )}
