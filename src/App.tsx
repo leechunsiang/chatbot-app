@@ -8,7 +8,7 @@ import { ResetPassword } from '@/components/ResetPassword';
 import { UserMenu } from '@/components/UserMenu';
 import { supabase } from '@/lib/supabase';
 import { ensureUserExists } from '@/lib/database';
-import { FileText, Gift, HelpCircle, MessageSquare, BarChart3 } from 'lucide-react';
+import { MessageSquare, BarChart3 } from 'lucide-react';
 
 type UserRole = 'employee' | 'manager' | 'hr_admin';
 
@@ -319,76 +319,10 @@ export function App() {
       label: (
         <span className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-black" />
-          Chatbot
+          Lets chat!
         </span>
       ),
       content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} />,
-      disabled: !isAuthenticated || !hasOrganization,
-    },
-    {
-      label: (
-        <span className="flex items-center gap-2">
-          <FileText className="w-5 h-5 text-black" />
-          Policy
-        </span>
-      ),
-      content: (
-        <Card className="w-full h-full">
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
-              <FileText className="w-16 h-16 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-bold mb-2">Policy Documents</h2>
-              <p className="text-muted-foreground text-center max-w-md">
-                View and manage company policy documents. Coming soon.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ),
-      disabled: !isAuthenticated || !hasOrganization,
-    },
-    {
-      label: (
-        <span className="flex items-center gap-2">
-          <Gift className="w-5 h-5 text-black" />
-          Benefits
-        </span>
-      ),
-      content: (
-        <Card className="w-full h-full">
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
-              <Gift className="w-16 h-16 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-bold mb-2">Employee Benefits</h2>
-              <p className="text-muted-foreground text-center max-w-md">
-                Explore your benefits and perks. Coming soon.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ),
-      disabled: !isAuthenticated || !hasOrganization,
-    },
-    {
-      label: (
-        <span className="flex items-center gap-2">
-          <HelpCircle className="w-5 h-5 text-black" />
-          FAQ
-        </span>
-      ),
-      content: (
-        <Card className="w-full h-full">
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center h-full min-h-[500px]">
-              <HelpCircle className="w-16 h-16 text-muted-foreground mb-4" />
-              <h2 className="text-2xl font-bold mb-2">FAQ Management</h2>
-              <p className="text-muted-foreground text-center max-w-md">
-                Browse frequently asked questions. Coming soon.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ),
       disabled: !isAuthenticated || !hasOrganization,
     },
   ];
