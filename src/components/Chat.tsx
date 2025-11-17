@@ -478,6 +478,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 You should:
 - Focus on HR-related topics like policies, benefits, leave, compensation, etc.
 - Use the provided policy documents to answer questions accurately
+- If there is doubt about the question or unclear, politely redirect the user to HR department.
 - If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
 - Be professional, clear, and helpful
 
@@ -491,6 +492,7 @@ Base your answers on these documents when relevant.`
 You should:
 - Focus on HR-related topics like policies, benefits, leave, compensation, etc.
 - Let users know when you don't have specific policy information available
+- If there is doubt about the question or unclear, politely redirect the user to HR department.
 - If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
 - Be professional, clear, and helpful
 
