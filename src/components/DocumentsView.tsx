@@ -20,6 +20,34 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
     loadDocuments();
   }, [statusFilter]);
 
+  // Set up real-time subscription for document updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('document-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'policy_documents',
+        },
+        (payload) => {
+          console.log('Document updated:', payload);
+          // Update the specific document in state
+          setDocuments((prevDocs) =>
+            prevDocs.map((doc) =>
+              doc.id === payload.new.id ? { ...doc, ...payload.new } : doc
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const loadDocuments = async () => {
     try {
       setIsLoading(true);
