@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { QuickActionButton } from './QuickActionButton';
 import type { Suggestion } from '@/lib/suggestions';
-import { Sparkles, Tag, TrendingUp, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Sparkles, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SuggestionsPanelProps {
@@ -26,9 +25,7 @@ export function SuggestionsPanel({
 
   const hasAnySuggestions =
     suggestions.relatedQuestions.length > 0 ||
-    suggestions.categories.length > 0 ||
-    suggestions.followUpTopics.length > 0 ||
-    suggestions.actionButtons.length > 0;
+    suggestions.followUpTopics.length > 0;
 
   if (!hasAnySuggestions && !isLoading) {
     return null;
@@ -74,28 +71,6 @@ export function SuggestionsPanel({
             </div>
           ) : (
             <>
-              {suggestions.actionButtons.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-orange-600 dark:text-orange-400" strokeWidth={2.5} />
-                    <h4 className="text-sm font-black text-black dark:text-white uppercase tracking-wide">
-                      Quick Actions
-                    </h4>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.actionButtons.map((suggestion) => (
-                      <QuickActionButton
-                        key={suggestion.id}
-                        text={suggestion.suggestion_text}
-                        onClick={() => onSuggestionClick(suggestion)}
-                        variant="primary"
-                        icon={Zap}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {suggestions.relatedQuestions.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -125,39 +100,6 @@ export function SuggestionsPanel({
                         <span className="text-sm font-bold text-black dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                           {suggestion.suggestion_text}
                         </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {suggestions.categories.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Tag className="w-4 h-4 text-green-600 dark:text-green-400" strokeWidth={2.5} />
-                    <h4 className="text-sm font-black text-black dark:text-white uppercase tracking-wide">
-                      Categories
-                    </h4>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestions.categories.map((suggestion) => (
-                      <button
-                        key={suggestion.id}
-                        onClick={() => onSuggestionClick(suggestion)}
-                        className={cn(
-                          'px-4 py-2 rounded-full',
-                          'bg-green-500 hover:bg-green-600',
-                          'text-white font-bold text-sm',
-                          'border-2 border-black dark:border-white',
-                          'shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)]',
-                          'hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]',
-                          'hover:-translate-x-[1px] hover:-translate-y-[1px]',
-                          'active:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:active:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]',
-                          'active:translate-x-[1px] active:translate-y-[1px]',
-                          'transition-all duration-150'
-                        )}
-                      >
-                        {suggestion.suggestion_text}
                       </button>
                     ))}
                   </div>

@@ -347,13 +347,7 @@ ${context}`
               conversation_id: convId,
               message_id: savedMessage.id,
             })),
-            categories: suggestions.categories.map((text, index) => ({
-              suggestion_text: text,
-              suggestion_type: 'category' as const,
-              display_order: index,
-              conversation_id: convId,
-              message_id: savedMessage.id,
-            })),
+            categories: [],
             followUpTopics: suggestions.followUpTopics.map((text, index) => ({
               suggestion_text: text,
               suggestion_type: 'follow_up' as const,
@@ -361,13 +355,7 @@ ${context}`
               conversation_id: convId,
               message_id: savedMessage.id,
             })),
-            actionButtons: suggestions.actionButtons.map((text, index) => ({
-              suggestion_text: text,
-              suggestion_type: 'action_button' as const,
-              display_order: index,
-              conversation_id: convId,
-              message_id: savedMessage.id,
-            })),
+            actionButtons: [],
           };
 
           setMessages(prev => {

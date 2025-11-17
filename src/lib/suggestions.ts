@@ -33,10 +33,8 @@ export async function generateSmartSuggestions(
 
 Based on the conversation history and the assistant's last response, generate:
 
-1. 3 related questions the user might want to ask next
-2. 2 relevant HR categories or topics being discussed
-3. 2 follow-up topics to explore deeper
-4. 2 quick action button texts (e.g., "Show me leave options", "Am I eligible?")
+1. 3-4 related questions the user might want to ask next
+2. 2-3 follow-up topics to explore deeper
 
 Conversation History:
 ${conversationHistory.slice(-6).map(msg => `${msg.role}: ${msg.content}`).join('\n')}
@@ -46,10 +44,8 @@ ${lastAssistantMessage}
 
 Respond ONLY with a valid JSON object in this exact format (no markdown, no extra text):
 {
-  "relatedQuestions": ["question 1", "question 2", "question 3"],
-  "categories": ["category 1", "category 2"],
-  "followUpTopics": ["topic 1", "topic 2"],
-  "actionButtons": ["action 1", "action 2"]
+  "relatedQuestions": ["question 1", "question 2", "question 3", "question 4"],
+  "followUpTopics": ["topic 1", "topic 2", "topic 3"]
 }
 
 Make the suggestions natural, relevant, and actionable. Keep them concise (under 60 characters each).`;
@@ -82,10 +78,10 @@ Make the suggestions natural, relevant, and actionable. Keep them concise (under
     const parsed = JSON.parse(cleanedContent);
 
     return {
-      relatedQuestions: Array.isArray(parsed.relatedQuestions) ? parsed.relatedQuestions.slice(0, 3) : [],
-      categories: Array.isArray(parsed.categories) ? parsed.categories.slice(0, 2) : [],
-      followUpTopics: Array.isArray(parsed.followUpTopics) ? parsed.followUpTopics.slice(0, 2) : [],
-      actionButtons: Array.isArray(parsed.actionButtons) ? parsed.actionButtons.slice(0, 2) : [],
+      relatedQuestions: Array.isArray(parsed.relatedQuestions) ? parsed.relatedQuestions.slice(0, 4) : [],
+      categories: [],
+      followUpTopics: Array.isArray(parsed.followUpTopics) ? parsed.followUpTopics.slice(0, 3) : [],
+      actionButtons: [],
     };
   } catch (error) {
     console.error('Error generating smart suggestions:', error);
