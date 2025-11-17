@@ -10,7 +10,7 @@ import type { Database } from '@/lib/database.types';
 
 type Message = Database['public']['Tables']['messages']['Row'];
 
-export function useConversation(userId: string | null, organizationId?: string | null) {
+export function useConversation(userId: string | null) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +43,7 @@ export function useConversation(userId: string | null, organizationId?: string |
     }
   }, []);
 
-  const loadConversation = useCallback(async (uid: string, orgId?: string) => {
+  const loadConversation = useCallback(async (uid: string) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -53,16 +53,10 @@ export function useConversation(userId: string | null, organizationId?: string |
         await ensureUserExists(uid, session.session.user.email || '');
       }
 
-      let conversationQuery = supabase
+      const { data: conversations, error: conversationError } = await supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', uid);
-
-      if (orgId) {
-        conversationQuery = conversationQuery.eq('organization_id', orgId);
-      }
-
-      const { data: conversations, error: conversationError } = await conversationQuery
+        .eq('user_id', uid)
         .order('updated_at', { ascending: false })
         .limit(1);
 
@@ -75,7 +69,7 @@ export function useConversation(userId: string | null, organizationId?: string |
       if (conversations && conversations.length > 0) {
         convId = conversations[0].id;
       } else {
-        const newConversation = await createConversation(uid, 'New Chat', orgId || undefined);
+        const newConversation = await createConversation(uid, 'New Chat');
         convId = newConversation.id;
       }
 
@@ -162,9 +156,9 @@ export function useConversation(userId: string | null, organizationId?: string |
 
   useEffect(() => {
     if (userId) {
-      loadConversation(userId, organizationId || undefined);
+      loadConversation(userId);
     }
-  }, [userId, organizationId, loadConversation]);
+  }, [userId, loadConversation]);
 
   return {
     conversationId,
