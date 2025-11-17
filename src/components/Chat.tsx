@@ -13,6 +13,7 @@ import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import { MultiLanguageTypewriter } from '@/components/ui/typewriter-text';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +58,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userFirstName, setUserFirstName] = useState<string | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -102,6 +104,22 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
         console.log('✅ Chat session loaded for user:', session.user.id);
         setUserId(session.user.id);
 
+        // Get user's first name and organization
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('first_name')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (userData?.first_name) {
+            setUserFirstName(userData.first_name);
+            console.log('✅ User first name loaded:', userData.first_name);
+          }
+        } catch (userErr) {
+          console.warn('⚠️ Could not load user first name:', userErr);
+        }
+
         // Get user's current organization
         try {
           const { data: orgData } = await supabase
@@ -109,7 +127,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
             .select('organization_id')
             .eq('user_id', session.user.id)
             .single();
-          
+
           if (orgData?.organization_id) {
             setOrganizationId(orgData.organization_id);
             console.log('✅ User organization:', orgData.organization_id);
@@ -1064,9 +1082,18 @@ Remember: Be helpful and human, not robotic. Explain policies like you're helpin
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 sm:py-32">
                     <Bot className="w-16 h-16 sm:w-20 sm:h-20 mb-6 opacity-50" />
-                    <p className="text-lg sm:text-xl text-center px-4 font-medium leading-relaxed">
-                      Beep boop! Benny's online and ready to chat
-                    </p>
+                    {userFirstName ? (
+                      <p className="text-lg sm:text-xl text-center px-4 font-medium leading-relaxed">
+                        <MultiLanguageTypewriter
+                          userName={userFirstName}
+                          className="text-primary font-bold"
+                        />
+                      </p>
+                    ) : (
+                      <p className="text-lg sm:text-xl text-center px-4 font-medium leading-relaxed">
+                        Beep boop! Benny's online and ready to chat
+                      </p>
+                    )}
                     <p className="text-sm sm:text-base text-center px-4 mt-2 opacity-60">
                       Type a message below to begin
                     </p>
