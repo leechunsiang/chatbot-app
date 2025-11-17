@@ -543,8 +543,9 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           </form>
 
           {/* Footer */}
-          <div className="mt-4 sm:mt-6 flex justify-center">
-            <img src="/kadoshAI.jpeg" alt="kadoshAI" className="h-6 sm:h-8 w-auto" />
+          <div className="mt-4 sm:mt-6 flex items-center justify-center gap-2">
+            <span className="text-xs sm:text-sm text-gray-600 font-medium">Powered by</span>
+            <img src="/kadoshAI-removebg.png" alt="kadoshAI" className="h-6 sm:h-8 w-auto" />
           </div>
         </div>
       </div>
