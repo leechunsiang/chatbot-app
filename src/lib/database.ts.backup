@@ -11,17 +11,12 @@ type MessageInsert = Database['public']['Tables']['messages']['Insert'];
 /**
  * Get all conversations for the current user
  */
-export async function getUserConversations(userId: string, organizationId?: string) {
-  let query = supabase
+export async function getUserConversations(userId: string) {
+  const { data, error } = await supabase
     .from('conversations')
     .select('*')
-    .eq('user_id', userId);
-
-  if (organizationId) {
-    query = query.eq('organization_id', organizationId);
-  }
-
-  const { data, error } = await query.order('updated_at', { ascending: false });
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
 
   if (error) throw error;
   return data as Conversation[];
@@ -30,7 +25,7 @@ export async function getUserConversations(userId: string, organizationId?: stri
 /**
  * Create a new conversation
  */
-export async function createConversation(userId: string, title: string = 'New Chat', organizationId?: string) {
+export async function createConversation(userId: string, title: string = 'New Chat') {
   console.log('📝 Creating conversation...', { userId, title });
 
   // Get current auth session to verify authentication
@@ -103,14 +98,9 @@ export async function createConversation(userId: string, title: string = 'New Ch
 
   // Now create the conversation
   console.log('📝 Inserting conversation record...');
-  const insertData: any = { user_id: userId, title };
-  if (organizationId) {
-    insertData.organization_id = organizationId;
-  }
-
   const { data, error } = await supabase
     .from('conversations')
-    .insert(insertData)
+    .insert({ user_id: userId, title })
     .select()
     .single();
 
