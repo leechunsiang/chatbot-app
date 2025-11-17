@@ -9,6 +9,44 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      smart_suggestions: {
+        Row: {
+          id: string
+          conversation_id: string
+          message_id: string
+          suggestion_text: string
+          suggestion_type: 'related_question' | 'category' | 'follow_up' | 'action_button'
+          display_order: number
+          clicked_count: number
+          metadata: Record<string, any>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          message_id: string
+          suggestion_text: string
+          suggestion_type: 'related_question' | 'category' | 'follow_up' | 'action_button'
+          display_order?: number
+          clicked_count?: number
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          message_id?: string
+          suggestion_text?: string
+          suggestion_type?: 'related_question' | 'category' | 'follow_up' | 'action_button'
+          display_order?: number
+          clicked_count?: number
+          metadata?: Record<string, any>
+          created_at?: string
+          updated_at?: string
+        }
+      }
       document_chunks: {
         Row: {
           id: string
@@ -179,6 +217,12 @@ export interface Database {
           content: string
           similarity: number
         }[]
+      }
+      increment_suggestion_click: {
+        Args: {
+          suggestion_id: string
+        }
+        Returns: void
       }
     }
     Enums: {

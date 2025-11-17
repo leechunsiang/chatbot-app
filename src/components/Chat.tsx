@@ -7,6 +7,8 @@ import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
 import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
+import { generateSmartSuggestions, saveSuggestionsToDatabase, incrementSuggestionClick, type Suggestion } from '@/lib/suggestions';
+import { SuggestionsPanel } from './SuggestionsPanel';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -15,6 +17,12 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   id?: string;
+  suggestions?: {
+    relatedQuestions: Suggestion[];
+    categories: Suggestion[];
+    followUpTopics: Suggestion[];
+    actionButtons: Suggestion[];
+  };
 }
 
 interface Conversation {
@@ -40,6 +48,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -315,7 +324,7 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
       await updateConversationTimestamp();
 
-      return message.id;
+      return message;
     } catch (err) {
       console.error('Error saving message:', err);
       throw new Error('Failed to save message to database');
@@ -511,7 +520,67 @@ Note: Currently, no policy documents are available. Encourage users to check wit
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      await saveMessage('assistant', assistantContent);
+      const savedMessage = await saveMessage('assistant', assistantContent);
+
+      if (savedMessage && savedMessage.id && conversationId) {
+        setIsGeneratingSuggestions(true);
+        try {
+          const conversationHistory = [...messages, { role: 'user', content: userMessageContent }].map(m => ({
+            role: m.role,
+            content: m.content
+          }));
+
+          const suggestions = await generateSmartSuggestions(conversationHistory, assistantContent);
+          await saveSuggestionsToDatabase(conversationId, savedMessage.id, suggestions);
+
+          const groupedSuggestions = {
+            relatedQuestions: suggestions.relatedQuestions.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'related_question' as const,
+              display_order: index,
+              conversation_id: conversationId,
+              message_id: savedMessage.id,
+            })),
+            categories: suggestions.categories.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'category' as const,
+              display_order: index,
+              conversation_id: conversationId,
+              message_id: savedMessage.id,
+            })),
+            followUpTopics: suggestions.followUpTopics.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'follow_up' as const,
+              display_order: index,
+              conversation_id: conversationId,
+              message_id: savedMessage.id,
+            })),
+            actionButtons: suggestions.actionButtons.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'action_button' as const,
+              display_order: index,
+              conversation_id: conversationId,
+              message_id: savedMessage.id,
+            })),
+          };
+
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastIndex = updated.length - 1;
+            if (lastIndex >= 0 && updated[lastIndex].role === 'assistant') {
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                suggestions: groupedSuggestions
+              };
+            }
+            return updated;
+          });
+        } catch (suggestionError) {
+          console.error('Error generating suggestions:', suggestionError);
+        } finally {
+          setIsGeneratingSuggestions(false);
+        }
+      }
     } catch (error) {
       console.error('Error in sendMessage:', error);
 
@@ -535,6 +604,20 @@ Note: Currently, no policy documents are available. Encourage users to check wit
     }
   };
 
+  const handleSuggestionClick = async (suggestion: Suggestion) => {
+    if (suggestion.id) {
+      await incrementSuggestionClick(suggestion.id);
+    }
+
+    setInput(suggestion.suggestion_text);
+
+    setTimeout(() => {
+      const form = document.querySelector('form') as HTMLFormElement;
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 100);
+  };
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-[hsl(var(--background))] rounded-3xl">
@@ -825,31 +908,57 @@ Note: Currently, no policy documents are available. Encourage users to check wit
                   </div>
                 ) : (
                   messages.map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex gap-4 sm:gap-5 ${
-                        message.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {message.role === 'assistant' && (
-                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/90 flex items-center justify-center shadow-md">
-                          <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
-                        </div>
-                      )}
+                    <div key={index} className="space-y-4">
                       <div
-                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
-                          message.role === 'user'
-                            ? 'bg-[hsl(var(--message-user))] text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
-                            : 'bg-[hsl(var(--message-assistant))] text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
+                        className={`flex gap-4 sm:gap-5 ${
+                          message.role === 'user' ? 'justify-end' : 'justify-start'
                         }`}
                       >
-                        <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-                          {message.content}
-                        </p>
+                        {message.role === 'assistant' && (
+                          <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/90 flex items-center justify-center shadow-md">
+                            <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+                          </div>
+                        )}
+                        <div
+                          className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
+                            message.role === 'user'
+                              ? 'bg-[hsl(var(--message-user))] text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
+                              : 'bg-[hsl(var(--message-assistant))] text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
+                          }`}
+                        >
+                          <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                            {message.content}
+                          </p>
+                        </div>
+                        {message.role === 'user' && (
+                          <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-secondary/90 flex items-center justify-center shadow-md">
+                            <User className="w-5 h-5 sm:w-6 sm:h-6 text-secondary-foreground" />
+                          </div>
+                        )}
                       </div>
-                      {message.role === 'user' && (
-                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-secondary/90 flex items-center justify-center shadow-md">
-                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-secondary-foreground" />
+
+                      {message.role === 'assistant' && message.suggestions && (
+                        <div className="ml-14 sm:ml-16">
+                          <SuggestionsPanel
+                            suggestions={message.suggestions}
+                            onSuggestionClick={handleSuggestionClick}
+                            isLoading={false}
+                          />
+                        </div>
+                      )}
+
+                      {message.role === 'assistant' && index === messages.length - 1 && isGeneratingSuggestions && (
+                        <div className="ml-14 sm:ml-16">
+                          <SuggestionsPanel
+                            suggestions={{
+                              relatedQuestions: [],
+                              categories: [],
+                              followUpTopics: [],
+                              actionButtons: [],
+                            }}
+                            onSuggestionClick={handleSuggestionClick}
+                            isLoading={true}
+                          />
                         </div>
                       )}
                     </div>

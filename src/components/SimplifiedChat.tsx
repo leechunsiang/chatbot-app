@@ -7,6 +7,8 @@ import { Send, Bot, User, AlertCircle, Plus, MessageSquare, Menu, X, Trash2 } fr
 import OpenAI from 'openai';
 import { createConversation, createMessage, getUserConversations, getConversationMessages, deleteConversation, updateConversationTitle, generateConversationTitle } from '@/lib/database';
 import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
+import { generateSmartSuggestions, saveSuggestionsToDatabase, incrementSuggestionClick, type Suggestion } from '@/lib/suggestions';
+import { SuggestionsPanel } from './SuggestionsPanel';
 import type { Database } from '@/lib/database.types';
 
 interface TypewriterTextProps {
@@ -46,6 +48,12 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   id?: string;
+  suggestions?: {
+    relatedQuestions: Suggestion[];
+    categories: Suggestion[];
+    followUpTopics: Suggestion[];
+    actionButtons: Suggestion[];
+  };
 }
 
 type Conversation = Database['public']['Tables']['conversations']['Row'];
@@ -68,6 +76,7 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   const [typingMessageIndex, setTypingMessageIndex] = useState<number | null>(null);
   const [hasOrganization, setHasOrganization] = useState<boolean>(false);
   const [isCheckingOrganization, setIsCheckingOrganization] = useState(true);
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize OpenAI client
@@ -151,12 +160,13 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   const saveMessage = async (role: 'user' | 'assistant', content: string, convId: string) => {
     try {
       console.log('💾 Saving message to database...', { role, convId });
-      await createMessage({
+      const message = await createMessage({
         conversation_id: convId,
         role,
         content
       });
       console.log('✅ Message saved successfully');
+      return message;
     } catch (err: any) {
       console.error('❌ Error saving message:', err);
       throw err;
@@ -313,10 +323,70 @@ ${context}`
 
       setMessages(prev => {
         const newMessages = [...prev, assistantMessage];
-        setTypingMessageIndex(newMessages.length - 1); // Set the new message for typing animation
+        setTypingMessageIndex(newMessages.length - 1);
         return newMessages;
       });
-      await saveMessage('assistant', assistantContent, convId);
+      const savedMessage = await saveMessage('assistant', assistantContent, convId);
+
+      if (savedMessage && savedMessage.id) {
+        setIsGeneratingSuggestions(true);
+        try {
+          const conversationHistory = [...messages, { role: 'user', content: userMessageContent }].map(m => ({
+            role: m.role,
+            content: m.content
+          }));
+
+          const suggestions = await generateSmartSuggestions(conversationHistory, assistantContent);
+          await saveSuggestionsToDatabase(convId, savedMessage.id, suggestions);
+
+          const groupedSuggestions = {
+            relatedQuestions: suggestions.relatedQuestions.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'related_question' as const,
+              display_order: index,
+              conversation_id: convId,
+              message_id: savedMessage.id,
+            })),
+            categories: suggestions.categories.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'category' as const,
+              display_order: index,
+              conversation_id: convId,
+              message_id: savedMessage.id,
+            })),
+            followUpTopics: suggestions.followUpTopics.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'follow_up' as const,
+              display_order: index,
+              conversation_id: convId,
+              message_id: savedMessage.id,
+            })),
+            actionButtons: suggestions.actionButtons.map((text, index) => ({
+              suggestion_text: text,
+              suggestion_type: 'action_button' as const,
+              display_order: index,
+              conversation_id: convId,
+              message_id: savedMessage.id,
+            })),
+          };
+
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastIndex = updated.length - 1;
+            if (lastIndex >= 0 && updated[lastIndex].role === 'assistant') {
+              updated[lastIndex] = {
+                ...updated[lastIndex],
+                suggestions: groupedSuggestions
+              };
+            }
+            return updated;
+          });
+        } catch (suggestionError) {
+          console.error('Error generating suggestions:', suggestionError);
+        } finally {
+          setIsGeneratingSuggestions(false);
+        }
+      }
     } catch (error) {
       console.error('Error in sendMessage:', error);
       const errorMessage: Message = {
@@ -332,6 +402,21 @@ ${context}`
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSuggestionClick = async (suggestion: Suggestion) => {
+    if (suggestion.id) {
+      await incrementSuggestionClick(suggestion.id);
+    }
+
+    setInput(suggestion.suggestion_text);
+
+    setTimeout(() => {
+      const form = document.querySelector('form') as HTMLFormElement;
+      if (form) {
+        form.requestSubmit();
+      }
+    }, 100);
   };
 
   return (
@@ -508,41 +593,67 @@ ${context}`
                   </div>
                 ) : (
                   messages.map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex gap-4 sm:gap-5 ${
-                        message.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {message.role === 'assistant' && (
-                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
-                          <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                        </div>
-                      )}
+                    <div key={index} className="space-y-4">
                       <div
-                        className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
-                          message.role === 'user'
-                            ? 'bg-blue-600 text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
-                            : 'bg-white dark:bg-slate-800 text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
+                        className={`flex gap-4 sm:gap-5 ${
+                          message.role === 'user' ? 'justify-end' : 'justify-start'
                         }`}
                       >
-                        {message.role === 'assistant' && typingMessageIndex === index ? (
-                          <p className="text-[15px] sm:text-base">
-                            <TypewriterText 
-                              text={message.content} 
-                              speed={20}
-                              onComplete={() => setTypingMessageIndex(null)}
-                            />
-                          </p>
-                        ) : (
-                          <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-                            {message.content}
-                          </p>
+                        {message.role === 'assistant' && (
+                          <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-600 flex items-center justify-center shadow-md">
+                            <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                          </div>
+                        )}
+                        <div
+                          className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
+                            message.role === 'user'
+                              ? 'bg-blue-600 text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
+                              : 'bg-white dark:bg-slate-800 text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
+                          }`}
+                        >
+                          {message.role === 'assistant' && typingMessageIndex === index ? (
+                            <p className="text-[15px] sm:text-base">
+                              <TypewriterText
+                                text={message.content}
+                                speed={20}
+                                onComplete={() => setTypingMessageIndex(null)}
+                              />
+                            </p>
+                          ) : (
+                            <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                              {message.content}
+                            </p>
+                          )}
+                        </div>
+                        {message.role === 'user' && (
+                          <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-600 flex items-center justify-center shadow-md">
+                            <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                          </div>
                         )}
                       </div>
-                      {message.role === 'user' && (
-                        <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-600 flex items-center justify-center shadow-md">
-                          <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+
+                      {message.role === 'assistant' && message.suggestions && (
+                        <div className="ml-14 sm:ml-16">
+                          <SuggestionsPanel
+                            suggestions={message.suggestions}
+                            onSuggestionClick={handleSuggestionClick}
+                            isLoading={false}
+                          />
+                        </div>
+                      )}
+
+                      {message.role === 'assistant' && index === messages.length - 1 && isGeneratingSuggestions && (
+                        <div className="ml-14 sm:ml-16">
+                          <SuggestionsPanel
+                            suggestions={{
+                              relatedQuestions: [],
+                              categories: [],
+                              followUpTopics: [],
+                              actionButtons: [],
+                            }}
+                            onSuggestionClick={handleSuggestionClick}
+                            isLoading={true}
+                          />
                         </div>
                       )}
                     </div>
