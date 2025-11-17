@@ -281,23 +281,53 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
 
       // Search for relevant document chunks
       let context = '';
+      let relevantChunks = [];
       try {
-        const relevantChunks = await searchDocumentChunks(userMessageContent, 0.5, 5);
+        relevantChunks = await searchDocumentChunks(userMessageContent, 0.3, 10);
         if (relevantChunks.length > 0) {
           context = buildContextFromChunks(relevantChunks);
+          console.log(`✅ Using ${relevantChunks.length} policy document chunks to answer question`);
+        } else {
+          console.warn('⚠️ No policy documents found for this query');
         }
       } catch (ragError) {
         console.error('⚠️ Error searching documents:', ragError);
       }
 
-      // Build messages with system prompt
-      const systemPrompt = context
-        ? `You are a helpful HR assistant that answers questions about company policies and benefits.
-           
-Base your answers on these policy documents:
+      // If no relevant documents found, provide a standard response
+      if (!context || relevantChunks.length === 0) {
+        const noDocumentResponse = "I couldn't find information about this in our policy documents. Please contact your HR department for assistance with this question.";
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: noDocumentResponse
+        };
+        setMessages(prev => {
+          const newMessages = [...prev, assistantMessage];
+          setTypingMessageIndex(newMessages.length - 1);
+          return newMessages;
+        });
+        await saveMessage('assistant', noDocumentResponse, convId);
+        return;
+      }
 
-${context}`
-        : `You are a helpful HR assistant that answers questions about company policies and benefits. Be professional, clear, and helpful.`;
+      // Build messages with system prompt - STRICT document-only mode
+      const systemPrompt = `You are an HR assistant that answers questions STRICTLY based on company policy documents.
+
+CRITICAL INSTRUCTIONS:
+- You MUST ONLY use information from the policy documents provided below
+- DO NOT use general knowledge, assumptions, or information not in the documents
+- If the documents don't contain the answer, you MUST say: "I don't have specific policy information about this. Please contact your HR department."
+- Quote or paraphrase the exact policy text when answering
+- Never invent, assume, or make up policy information
+- Be direct and factual - do not embellish or add extra information not in the policies
+
+=== OFFICIAL POLICY DOCUMENTS (ANSWER ONLY FROM THESE) ===
+
+${context}
+
+=== END OF POLICY DOCUMENTS ===
+
+Remember: If the answer is not clearly stated in the above documents, say you don't have that information and direct the user to HR.`;
 
       const messagesForAPI = [
         { role: 'system' as const, content: systemPrompt },
@@ -311,7 +341,7 @@ ${context}`
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: messagesForAPI,
-        temperature: 0.7,
+        temperature: 0.3,
         max_tokens: 1000,
       });
 

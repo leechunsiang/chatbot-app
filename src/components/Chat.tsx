@@ -449,54 +449,59 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
       // Search for relevant document chunks from user's organization
       let context = '';
+      let relevantChunks = [];
       try {
         console.log('🔍 Searching for relevant policy documents...');
-        const relevantChunks = await searchDocumentChunks(
-          userMessageContent, 
-          0.5, 
-          5,
+        relevantChunks = await searchDocumentChunks(
+          userMessageContent,
+          0.3,
+          10,
           organizationId || undefined
         );
 
         if (relevantChunks.length > 0) {
           context = buildContextFromChunks(relevantChunks);
           console.log(`✅ Found ${relevantChunks.length} relevant document chunks`);
-          console.log('📚 Document chunks will be used to answer the question');
+          console.log('✅ Using policy documents to answer question');
         } else {
-          console.log('ℹ️ No relevant documents found');
+          console.warn('⚠️ No relevant documents found for this query');
           console.log('💡 Tip: Make sure documents are uploaded, published, and processed successfully');
         }
       } catch (ragError) {
         console.error('⚠️ Error searching documents:', ragError);
-        // Continue without context if RAG fails
       }
 
-      // Build messages array with system prompt and context
-      const systemPrompt = context
-        ? `You are a helpful HR assistant that answers questions about company policies and benefits. 
-           
-You should:
-- Focus on HR-related topics like policies, benefits, leave, compensation, etc.
-- Use the provided policy documents to answer questions accurately
-- If there is doubt about the question or unclear, politely redirect the user to HR department.
-- If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
-- Be professional, clear, and helpful
+      // If no relevant documents found, provide a standard response
+      if (!context || relevantChunks.length === 0) {
+        const noDocumentResponse = "I couldn't find information about this in our policy documents. Please contact your HR department for assistance with this question.";
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: noDocumentResponse
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        await saveMessage('assistant', noDocumentResponse);
+        setIsLoading(false);
+        return;
+      }
 
-Here are the relevant policy documents for context:
+      // Build messages array with system prompt - STRICT document-only mode
+      const systemPrompt = `You are an HR assistant that answers questions STRICTLY based on company policy documents.
+
+CRITICAL INSTRUCTIONS:
+- You MUST ONLY use information from the policy documents provided below
+- DO NOT use general knowledge, assumptions, or information not in the documents
+- If the documents don't contain the answer, you MUST say: "I don't have specific policy information about this. Please contact your HR department."
+- Quote or paraphrase the exact policy text when answering
+- Never invent, assume, or make up policy information
+- Be direct and factual - do not embellish or add extra information not in the policies
+
+=== OFFICIAL POLICY DOCUMENTS (ANSWER ONLY FROM THESE) ===
 
 ${context}
 
-Base your answers on these documents when relevant.`
-        : `You are a helpful HR assistant that answers questions about company policies and benefits.
+=== END OF POLICY DOCUMENTS ===
 
-You should:
-- Focus on HR-related topics like policies, benefits, leave, compensation, etc.
-- Let users know when you don't have specific policy information available
-- If there is doubt about the question or unclear, politely redirect the user to HR department.
-- If a question is outside the scope of HR/policies/benefits, politely redirect the conversation
-- Be professional, clear, and helpful
-
-Note: Currently, no policy documents are available. Encourage users to check with their HR department for specific policy information.`;
+Remember: If the answer is not clearly stated in the above documents, say you don't have that information and direct the user to HR.`;
 
       const messagesForAPI = [
         { role: 'system' as const, content: systemPrompt },
@@ -510,7 +515,7 @@ Note: Currently, no policy documents are available. Encourage users to check wit
       const response = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: messagesForAPI,
-        temperature: 0.7,
+        temperature: 0.3,
         max_tokens: 1000,
       });
 
