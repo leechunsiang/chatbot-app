@@ -14,6 +14,9 @@ export interface DocumentChunk {
   content: string;
   chunk_index: number;
   similarity?: number;
+  document_title?: string;
+  document_category?: string;
+  document_description?: string;
 }
 
 /**
@@ -100,6 +103,70 @@ export async function processDocumentForRAG(
 }
 
 /**
+ * Preprocess user query to extract policy-relevant topics and generate search variations
+ */
+export async function preprocessQuery(userQuery: string): Promise<{
+  originalQuery: string;
+  enhancedQueries: string[];
+  policyTopic?: string;
+}> {
+  try {
+    const prompt = `You are an HR policy expert. Analyze this employee question and extract the relevant policy topic and generate better search queries.
+
+Employee Question: "${userQuery}"
+
+Provide your response as JSON with:
+1. "policyTopic": The main policy area this question relates to (e.g., "Company Property", "Time Off", "Code of Conduct", "Benefits", "Workplace Safety")
+2. "searchQueries": Array of 2-3 reformulated queries using formal policy language that would better match policy documents
+
+Example:
+Question: "what if i block the company laptop"
+Response: {"policyTopic": "Company Property and Assets", "searchQueries": ["blocking company laptop consequences", "misuse of company equipment policy", "damage to company property penalties"]}
+
+Respond ONLY with valid JSON, no markdown or extra text.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that generates JSON responses for HR policy search optimization. Always respond with valid JSON only.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 300,
+    });
+
+    const content = response.choices[0]?.message?.content || '{}';
+    let cleanedContent = content.trim();
+
+    if (cleanedContent.startsWith('```json')) {
+      cleanedContent = cleanedContent.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    } else if (cleanedContent.startsWith('```')) {
+      cleanedContent = cleanedContent.replace(/```\n?/g, '');
+    }
+
+    const parsed = JSON.parse(cleanedContent);
+
+    return {
+      originalQuery: userQuery,
+      enhancedQueries: Array.isArray(parsed.searchQueries) ? parsed.searchQueries : [userQuery],
+      policyTopic: parsed.policyTopic || undefined,
+    };
+  } catch (error) {
+    console.error('⚠️ Query preprocessing failed, using original query:', error);
+    return {
+      originalQuery: userQuery,
+      enhancedQueries: [userQuery],
+    };
+  }
+}
+
+/**
  * Search for relevant document chunks based on a query
  * Filters by user's current organization
  */
@@ -110,29 +177,54 @@ export async function searchDocumentChunks(
   organizationId?: string
 ): Promise<DocumentChunk[]> {
   try {
-    console.log('🔍 RAG Search - Query:', query);
+    console.log('🔍 RAG Search - Original Query:', query);
     console.log('🔍 RAG Search - Threshold:', matchThreshold, 'Count:', matchCount);
     console.log('🔍 RAG Search - Organization:', organizationId || 'all');
 
-    const queryEmbedding = await createEmbedding(query);
-    console.log('✅ RAG Search - Query embedding created:', queryEmbedding.length, 'dimensions');
+    // Preprocess query to get enhanced search terms
+    const { enhancedQueries, policyTopic } = await preprocessQuery(query);
+    console.log('🧠 Query Analysis - Policy Topic:', policyTopic || 'unknown');
+    console.log('🧠 Query Analysis - Enhanced Queries:', enhancedQueries);
 
-    const { data, error } = await supabase.rpc('match_document_chunks', {
-      query_embedding: queryEmbedding,
-      match_threshold: matchThreshold,
-      match_count: matchCount,
-      filter_organization_id: organizationId || null,
-    });
+    // Search with all query variations and collect results
+    const allResults = new Map<string, DocumentChunk>();
+    const queriesToSearch = [query, ...enhancedQueries];
 
-    if (error) {
-      console.error('❌ RAG Search - RPC error:', error);
-      throw error;
+    for (const searchQuery of queriesToSearch) {
+      const queryEmbedding = await createEmbedding(searchQuery);
+
+      const { data, error } = await supabase.rpc('match_document_chunks', {
+        query_embedding: queryEmbedding,
+        match_threshold: matchThreshold,
+        match_count: matchCount,
+        filter_organization_id: organizationId || null,
+      });
+
+      if (error) {
+        console.error('❌ RAG Search - RPC error for query "' + searchQuery + '":', error);
+        continue;
+      }
+
+      // Merge results, keeping the highest similarity score for each chunk
+      if (data && data.length > 0) {
+        data.forEach((chunk: any) => {
+          const existing = allResults.get(chunk.id);
+          if (!existing || (chunk.similarity > (existing.similarity || 0))) {
+            allResults.set(chunk.id, chunk);
+          }
+        });
+      }
     }
 
-    console.log(`✅ RAG Search - Found ${data?.length || 0} matching chunks`);
+    // Convert map to array and sort by similarity
+    const combinedResults = Array.from(allResults.values())
+      .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+      .slice(0, matchCount);
 
-    if (data && data.length > 0) {
-      data.forEach((chunk: any, idx: number) => {
+    console.log(`✅ RAG Search - Found ${combinedResults.length} unique matching chunks from ${queriesToSearch.length} query variations`);
+
+    if (combinedResults.length > 0) {
+      combinedResults.forEach((chunk: any, idx: number) => {
         console.log(`  📄 Chunk ${idx + 1}: Similarity ${(chunk.similarity * 100).toFixed(1)}%, Length: ${chunk.content?.length || 0} chars`);
       });
     } else {
@@ -142,7 +234,7 @@ export async function searchDocumentChunks(
       console.warn('  - Query not semantically similar to document content');
     }
 
-    return data || [];
+    return combinedResults;
   } catch (error) {
     console.error('❌ RAG Search - Error:', error);
     throw error;
@@ -326,7 +418,9 @@ export function buildContextFromChunks(chunks: DocumentChunk[]): string {
   const context = chunks
     .map((chunk, index) => {
       const similarityPercent = chunk.similarity ? `(${(chunk.similarity * 100).toFixed(1)}% match)` : '';
-      return `[Document ${index + 1}] ${similarityPercent}\n${chunk.content}`;
+      const documentInfo = chunk.document_title ? `\nPolicy Document: ${chunk.document_title}` : '';
+      const categoryInfo = chunk.document_category ? `\nCategory: ${chunk.document_category}` : '';
+      return `[Document ${index + 1}] ${similarityPercent}${documentInfo}${categoryInfo}\n${chunk.content}`;
     })
     .join('\n\n---\n\n');
 
