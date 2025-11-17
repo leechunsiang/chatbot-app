@@ -267,7 +267,7 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
                         <span className={`${getStatusColor(doc.status)} border-2 border-black rounded px-2 py-1 text-xs font-black text-black`}>
                           {doc.status}
                         </span>
-                        {doc.processing_status && (
+                        {doc.processing_status && doc.processing_status !== 'completed' && (
                           <span className={`${getProcessingStatusColor(doc.processing_status)} border-2 border-black rounded px-2 py-1 text-xs font-black text-black`}>
                             {doc.processing_status}
                           </span>

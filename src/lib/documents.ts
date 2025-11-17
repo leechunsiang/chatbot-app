@@ -266,6 +266,22 @@ export async function getDocumentStats() {
  */
 async function processDocumentAsync(documentId: string, filePath: string, fileType: string): Promise<void> {
   try {
+    // Check if document already has chunks
+    const { data: existingChunks } = await supabase
+      .from('document_chunks')
+      .select('id')
+      .eq('document_id', documentId)
+      .limit(1);
+
+    if (existingChunks && existingChunks.length > 0) {
+      console.log('📄 Document already has chunks, skipping processing');
+      await supabase
+        .from('policy_documents')
+        .update({ processing_status: 'completed' })
+        .eq('id', documentId);
+      return;
+    }
+
     await supabase
       .from('policy_documents')
       .update({ processing_status: 'processing' })
@@ -280,7 +296,24 @@ async function processDocumentAsync(documentId: string, filePath: string, fileTy
 
     await processDocumentForRAG(documentId, result.text);
 
-    await supabase
+    // Verify chunks were created
+    const { data: verifyChunks, error: verifyError } = await supabase
+      .from('document_chunks')
+      .select('id')
+      .eq('document_id', documentId)
+      .limit(1);
+
+    if (verifyError) {
+      throw new Error(`Failed to verify chunks: ${verifyError.message}`);
+    }
+
+    if (!verifyChunks || verifyChunks.length === 0) {
+      throw new Error('No chunks were created during processing');
+    }
+
+    // The trigger should have already updated status to 'completed'
+    // But we'll explicitly update as a safety measure
+    const { error: updateError } = await supabase
       .from('policy_documents')
       .update({
         processing_status: 'completed',
@@ -289,6 +322,10 @@ async function processDocumentAsync(documentId: string, filePath: string, fileTy
         processing_error: null,
       })
       .eq('id', documentId);
+
+    if (updateError) {
+      console.warn('⚠️ Failed to update document status, but chunks were created successfully');
+    }
 
     console.log('✅ Document fully processed for RAG');
   } catch (error) {
