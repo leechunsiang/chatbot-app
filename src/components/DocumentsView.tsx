@@ -12,7 +12,7 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all');
   const [error, setError] = useState<string | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState<string | null>(null);
 
@@ -59,10 +59,23 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
     }
   };
 
-  const handleDownload = async (document: PolicyDocument) => {
+  const handleDownload = async (doc: PolicyDocument) => {
     try {
-      const { data } = supabase.storage.from('policy-documents').getPublicUrl(document.file_path);
-      window.open(data.publicUrl, '_blank');
+      const { data, error } = await supabase.storage
+        .from('policy-documents')
+        .download(doc.file_path);
+
+      if (error) throw error;
+      if (!data) throw new Error('No data received');
+
+      const url = URL.createObjectURL(data);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = doc.title || 'document';
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Error downloading document:', err);
       setError(err.message || 'Failed to download document');
@@ -163,7 +176,7 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
 
           {/* Status Filter */}
           <div className="flex gap-2">
-            {['all', 'published', 'draft', 'archived'].map((status) => (
+            {['all', 'published', 'draft'].map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status as any)}
