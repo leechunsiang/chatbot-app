@@ -241,9 +241,9 @@ export function Auth({ onAuthSuccess }: AuthProps) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-screen bg-[#E5E5E5] overflow-hidden">
+    <div className="flex flex-col lg:flex-row min-h-screen w-screen bg-[#E5E5E5]">
       {/* Left Section - Form */}
-      <div className="w-full lg:flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-10 relative z-20">
+      <div className="w-full lg:flex-1 flex items-center justify-center p-4 sm:p-6 md:p-8 lg:p-10 relative z-20 overflow-y-auto">
         <div className="w-full max-w-md">
           {/* Logo and Header */}
           <div className="mb-4 sm:mb-6">
