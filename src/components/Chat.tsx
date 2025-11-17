@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut, Trash2, LayoutDashboard, MoreVertical, Edit2 } from 'lucide-react';
+import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut, Trash2, LayoutDashboard, MoreVertical, Edit2, Volume2, VolumeX, Pause, Play, Settings } from 'lucide-react';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
@@ -12,6 +12,21 @@ import { SuggestionsPanel } from './SuggestionsPanel';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -49,9 +64,13 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [showSpeechSettings, setShowSpeechSettings] = useState(false);
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const speech = useSpeechSynthesis();
 
   // Initialize OpenAI client with direct API key
   const openai = new OpenAI({
@@ -636,6 +655,30 @@ Remember: Be helpful and human, not robotic. Explain policies like you're helpin
     }, 100);
   };
 
+  const handleSpeakMessage = (messageContent: string, messageIndex: number) => {
+    if (speakingMessageIndex === messageIndex && speech.isSpeaking) {
+      if (speech.isPaused) {
+        speech.resume();
+      } else {
+        speech.pause();
+      }
+    } else {
+      setSpeakingMessageIndex(messageIndex);
+      speech.speak(messageContent);
+    }
+  };
+
+  const handleStopSpeech = () => {
+    speech.stop();
+    setSpeakingMessageIndex(null);
+  };
+
+  useEffect(() => {
+    if (!speech.isSpeaking && speakingMessageIndex !== null) {
+      setSpeakingMessageIndex(null);
+    }
+  }, [speech.isSpeaking]);
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-[hsl(var(--background))] rounded-3xl">
       <Sidebar open={open} setOpen={setOpen}>
@@ -904,9 +947,114 @@ Remember: Be helpful and human, not robotic. Explain policies like you're helpin
           )}
 
           {/* Header */}
-          <div className="flex items-center justify-center mb-6 sm:mb-8">
-            <Bot className="w-8 h-8 sm:w-10 sm:h-10 mr-3 text-primary" />
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">Policy & Benefits Chatbot</h1>
+          <div className="flex items-center justify-between mb-6 sm:mb-8">
+            <div className="flex items-center">
+              <Bot className="w-8 h-8 sm:w-10 sm:h-10 mr-3 text-primary" />
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight">Policy & Benefits Chatbot</h1>
+            </div>
+
+            {/* Global Speech Controls */}
+            {speech.isSupported && (
+              <div className="flex items-center gap-2">
+                {speech.isSpeaking && (
+                  <Button
+                    onClick={handleStopSpeech}
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9"
+                    title="Stop speaking"
+                  >
+                    <VolumeX className="w-5 h-5" />
+                  </Button>
+                )}
+
+                <DropdownMenu open={showSpeechSettings} onOpenChange={setShowSpeechSettings}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9"
+                      title="Speech settings"
+                    >
+                      <Settings className="w-5 h-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuLabel>Speech Settings</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+
+                    <div className="p-3 space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Voice</label>
+                        <Select
+                          value={speech.settings.voiceURI}
+                          onValueChange={(value) => speech.updateSettings({ voiceURI: value })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select a voice" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {speech.voices.map((voice) => (
+                              <SelectItem key={voice.voiceURI} value={voice.voiceURI}>
+                                {voice.name} ({voice.lang})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex justify-between">
+                          <span>Speed</span>
+                          <span className="text-muted-foreground">{speech.settings.rate.toFixed(1)}x</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2"
+                          step="0.1"
+                          value={speech.settings.rate}
+                          onChange={(e) => speech.updateSettings({ rate: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex justify-between">
+                          <span>Pitch</span>
+                          <span className="text-muted-foreground">{speech.settings.pitch.toFixed(1)}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2"
+                          step="0.1"
+                          value={speech.settings.pitch}
+                          onChange={(e) => speech.updateSettings({ pitch: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex justify-between">
+                          <span>Volume</span>
+                          <span className="text-muted-foreground">{Math.round(speech.settings.volume * 100)}%</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={speech.settings.volume}
+                          onChange={(e) => speech.updateSettings({ volume: parseFloat(e.target.value) })}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
           </div>
 
           {/* Messages Area */}
@@ -936,16 +1084,58 @@ Remember: Be helpful and human, not robotic. Explain policies like you're helpin
                             <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
                           </div>
                         )}
-                        <div
-                          className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 max-w-[85%] sm:max-w-[75%] border-2 transition-transform duration-200 ${
-                            message.role === 'user'
-                              ? 'bg-[hsl(var(--message-user))] text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
-                              : 'bg-[hsl(var(--message-assistant))] text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
-                          }`}
-                        >
-                          <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
-                            {message.content}
-                          </p>
+                        <div className="flex flex-col gap-2 max-w-[85%] sm:max-w-[75%]">
+                          <div
+                            className={`rounded-2xl px-5 py-3.5 sm:px-6 sm:py-4 border-2 transition-transform duration-200 ${
+                              message.role === 'user'
+                                ? 'bg-[hsl(var(--message-user))] text-white border-blue-900/40 shadow-[6px_6px_0_rgba(15,23,42,0.9)]'
+                                : 'bg-[hsl(var(--message-assistant))] text-foreground border-slate-900/10 dark:border-slate-700/50 shadow-[6px_6px_0_rgba(15,23,42,0.8)] dark:shadow-[6px_6px_0_rgba(15,23,42,0.8)]'
+                            }`}
+                          >
+                            <p className="text-[15px] sm:text-base whitespace-pre-wrap break-words leading-relaxed">
+                              {message.content}
+                            </p>
+                          </div>
+
+                          {message.role === 'assistant' && speech.isSupported && (
+                            <div className="flex gap-1 ml-2">
+                              <Button
+                                onClick={() => handleSpeakMessage(message.content, index)}
+                                size="sm"
+                                variant="ghost"
+                                className={cn(
+                                  "h-7 px-2 text-xs gap-1.5",
+                                  speakingMessageIndex === index && speech.isSpeaking && "text-primary"
+                                )}
+                                title={
+                                  speakingMessageIndex === index && speech.isSpeaking
+                                    ? speech.isPaused
+                                      ? "Resume"
+                                      : "Pause"
+                                    : "Speak"
+                                }
+                              >
+                                {speakingMessageIndex === index && speech.isSpeaking ? (
+                                  speech.isPaused ? (
+                                    <>
+                                      <Play className="w-3 h-3" />
+                                      <span>Resume</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Pause className="w-3 h-3" />
+                                      <span>Pause</span>
+                                    </>
+                                  )
+                                ) : (
+                                  <>
+                                    <Volume2 className="w-3 h-3" />
+                                    <span>Speak</span>
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         {message.role === 'user' && (
                           <div className="flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-secondary/90 flex items-center justify-center shadow-md">
