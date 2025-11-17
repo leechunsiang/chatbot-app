@@ -38,6 +38,7 @@ export function Dashboard() {
   const [userToRemove, setUserToRemove] = useState<{ id: string; name: string } | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [currentActivityPage, setCurrentActivityPage] = useState(1);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showDocumentsView, setShowDocumentsView] = useState(false);
   const [metrics, setMetrics] = useState<DashboardMetrics>({
@@ -154,8 +155,9 @@ export function Dashboard() {
     if (!userOrganizationId) return;
 
     setIsLoadingActivities(true);
+    setCurrentActivityPage(1);
     try {
-      const { data, error } = await getRecentActivities(userOrganizationId, 10);
+      const { data, error } = await getRecentActivities(userOrganizationId, 50);
       if (error) {
         console.error('Error fetching activities:', error);
       } else {
@@ -708,21 +710,44 @@ export function Dashboard() {
                 <p className="text-black/50 font-bold">No recent activities</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {activities.map((activity) => (
-                  <div key={activity.id} className={`${getActivityColor(activity.action_type)} border-3 border-black rounded-lg p-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-black text-black">{activity.description}</p>
-                        {activity.metadata?.userEmail && (
-                          <p className="text-sm font-bold text-black/70">{activity.metadata.userEmail}</p>
-                        )}
+              <>
+                <div className="space-y-4">
+                  {activities.slice((currentActivityPage - 1) * 5, currentActivityPage * 5).map((activity) => (
+                    <div key={activity.id} className={`${getActivityColor(activity.action_type)} border-3 border-black rounded-lg p-4 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-black text-black">{activity.description}</p>
+                          {activity.metadata?.userEmail && (
+                            <p className="text-sm font-bold text-black/70">{activity.metadata.userEmail}</p>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-black/50">{formatRelativeTime(activity.created_at)}</span>
                       </div>
-                      <span className="text-xs font-bold text-black/50">{formatRelativeTime(activity.created_at)}</span>
                     </div>
+                  ))}
+                </div>
+                {activities.length > 5 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <button
+                      onClick={() => setCurrentActivityPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentActivityPage === 1}
+                      className="bg-blue-400 border-3 border-black rounded-lg px-4 py-2 font-black text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+                    >
+                      Previous
+                    </button>
+                    <span className="font-black text-black px-4">
+                      Page {currentActivityPage} of {Math.ceil(activities.length / 5)}
+                    </span>
+                    <button
+                      onClick={() => setCurrentActivityPage(prev => Math.min(Math.ceil(activities.length / 5), prev + 1))}
+                      disabled={currentActivityPage >= Math.ceil(activities.length / 5)}
+                      className="bg-blue-400 border-3 border-black rounded-lg px-4 py-2 font-black text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+                    >
+                      Next
+                    </button>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
 
