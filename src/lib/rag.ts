@@ -493,3 +493,55 @@ export async function testRAGSearch(query: string = 'company policy'): Promise<{
     };
   }
 }
+
+export async function checkQuestionRelevance(question: string): Promise<boolean> {
+  try {
+    const prompt = `You are an HR assistant. Determine if the following question is relevant to workplace policies, benefits, HR procedures, or employment-related topics.
+
+Question: "${question}"
+
+Relevant topics include:
+- Company policies (time off, dress code, workplace conduct, remote work, etc.)
+- Employee benefits (health insurance, retirement, leave policies, etc.)
+- HR procedures (onboarding, performance reviews, complaints, etc.)
+- Workplace equipment and resources
+- Compensation and payroll
+- Workplace safety
+- Professional development and training
+- Any other employment or workplace-related topics
+
+Irrelevant topics include:
+- General knowledge questions (sports, entertainment, news, weather, etc.)
+- Personal advice unrelated to work
+- Technical support for non-work tools
+- Any topic not related to the workplace or employment
+
+Respond with ONLY "relevant" or "irrelevant" - no other text.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a classification assistant. Respond with only "relevant" or "irrelevant".'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0,
+      max_tokens: 10,
+    });
+
+    const result = response.choices[0]?.message?.content?.toLowerCase().trim() || 'irrelevant';
+    const isRelevant = result.includes('relevant') && !result.includes('irrelevant');
+
+    console.log(`🎯 Question Relevance Check: "${question}" -> ${isRelevant ? 'RELEVANT' : 'IRRELEVANT'}`);
+
+    return isRelevant;
+  } catch (error) {
+    console.error('⚠️ Error checking question relevance:', error);
+    return true;
+  }
+}

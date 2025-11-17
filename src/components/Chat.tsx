@@ -6,7 +6,7 @@ import { Send, Bot, User, AlertCircle, MessageSquarePlus, MessageSquare, LogOut,
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { createConversation, createMessage, getConversationMessages, generateConversationTitle, getUserConversations, deleteConversation } from '@/lib/database';
-import { searchDocumentChunks, buildContextFromChunks } from '@/lib/rag';
+import { searchDocumentChunks, buildContextFromChunks, checkQuestionRelevance } from '@/lib/rag';
 import { generateSmartSuggestions, saveSuggestionsToDatabase, incrementSuggestionClick, type Suggestion } from '@/lib/suggestions';
 import { SuggestionsPanel } from './SuggestionsPanel';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
@@ -446,6 +446,25 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
       if (isFirstMessage) {
         await updateConversationTitleFromFirstMessage(userMessageContent);
       }
+
+      // Check if question is relevant to policies and benefits
+      console.log('🎯 Checking question relevance...');
+      const isRelevant = await checkQuestionRelevance(userMessageContent);
+
+      if (!isRelevant) {
+        console.log('❌ Question is not relevant to policies and benefits');
+        const redirectResponse = "I'm here to help with questions about company policies, benefits, and HR-related topics. Could you ask me something about workplace policies, employee benefits, time off, or other work-related matters? For example, you could ask about vacation policies, health benefits, dress code, or workplace procedures.";
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: redirectResponse
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        await saveMessage('assistant', redirectResponse);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('✅ Question is relevant to policies and benefits');
 
       // Search for relevant document chunks from user's organization
       let context = '';
