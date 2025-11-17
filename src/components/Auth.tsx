@@ -490,7 +490,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                       type="checkbox"
                       className="w-4 h-4 border-2 border-black rounded accent-black"
                     />
-                    <span className="font-medium text-black">Remember for 30 days</span>
+                    <span className="font-medium text-black">Remember me</span>
                   </label>
                   <button
                     type="button"
@@ -543,8 +543,8 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           </form>
 
           {/* Footer */}
-          <div className="mt-4 sm:mt-6 text-center text-xs text-gray-600">
-            © Untitled UI 2077
+          <div className="mt-4 sm:mt-6 flex justify-center">
+            <img src="/kadoshAI.jpeg" alt="kadoshAI" className="h-6 sm:h-8 w-auto" />
           </div>
         </div>
       </div>
