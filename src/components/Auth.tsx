@@ -159,6 +159,16 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           return;
         }
 
+        // Validate organization is selected or being created
+        if (!selectedOrg && (!isCreatingNewOrg || !newOrgName.trim())) {
+          setMessage({
+            type: 'error',
+            text: 'Please select an organization or create a new one'
+          });
+          setIsLoading(false);
+          return;
+        }
+
         // Sign up the user
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
@@ -188,7 +198,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             console.error('Error updating user profile:', profileError);
           }
 
-          // Handle organization creation or joining
+          // Handle organization creation or joining - REQUIRED
           try {
             if (isCreatingNewOrg && newOrgName.trim()) {
               // Create new organization
@@ -203,11 +213,8 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             }
           } catch (orgError: any) {
             console.error('Error handling organization:', orgError);
-            // Don't fail signup if organization step fails
-            setMessage({
-              type: 'success',
-              text: 'Account created successfully, but there was an issue with the organization. You can join one later.'
-            });
+            // Fail signup if organization step fails since it's required
+            throw new Error(`Failed to set up organization: ${orgError.message}`);
           }
         }
 
@@ -372,16 +379,11 @@ export function Auth({ onAuthSuccess }: AuthProps) {
               {/* Organization Section - Only show during sign up */}
               {isSignUp && (
                 <div className="space-y-1 sm:space-y-2">
-                  <div className="flex items-center gap-2">
-                    <label className="block text-sm font-bold text-black">
-                      Join Organization
-                    </label>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-bold text-gray-700 bg-gray-200 border-2 border-black rounded">
-                      Optional
-                    </span>
-                  </div>
+                  <label className="block text-sm font-bold text-black">
+                    Organization <span className="text-red-600">*</span>
+                  </label>
                   <p className="text-xs text-gray-600 mb-2">
-                    Search for your organization or create a new one. You can skip this step.
+                    Search for your organization or create a new one.
                   </p>
 
                   {selectedOrg ? (
@@ -463,7 +465,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                           ) : null}
 
                           {/* Action buttons */}
-                          <div className="border-t-3 border-black p-2 space-y-1">
+                          <div className="border-t-3 border-black p-2">
                             <button
                               type="button"
                               onClick={handleToggleCreateMode}
@@ -472,13 +474,6 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                             >
                               <Building2 className="w-4 h-4" />
                               Create New Organization
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowOrgDropdown(false)}
-                              className="w-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                            >
-                              Skip for now
                             </button>
                           </div>
                         </div>
