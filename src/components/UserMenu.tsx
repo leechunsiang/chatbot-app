@@ -29,14 +29,10 @@ export function UserMenu({ isAuthenticated, userEmail, onAuthRequired }: UserMen
       console.log('🚪 Logging out...');
       await onAuthRequired();
       console.log('✅ Logout complete');
+      window.location.reload();
     } catch (error) {
       console.error('❌ Exception during logout:', error);
-      // Try again even on exception
-      try {
-        await onAuthRequired();
-      } catch (retryError) {
-        console.error('❌ Retry failed:', retryError);
-      }
+      window.location.reload();
     }
   };
 
