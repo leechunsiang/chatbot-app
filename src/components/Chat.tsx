@@ -979,7 +979,7 @@ Remember: Be helpful and human, not robotic. Explain policies like you're helpin
                       <Settings className="w-5 h-5" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-72">
+                  <DropdownMenuContent align="end" className="w-72 bg-white dark:bg-slate-900 border-2">
                     <DropdownMenuLabel>Speech Settings</DropdownMenuLabel>
                     <DropdownMenuSeparator />
 
