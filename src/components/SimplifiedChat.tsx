@@ -77,9 +77,10 @@ type Conversation = Database['public']['Tables']['conversations']['Row'];
 interface SimplifiedChatProps {
   initialUserId?: string | null;
   isAuthenticated?: boolean;
+  selectedOrganizationId?: string | null;
 }
 
-export function SimplifiedChat({ initialUserId, isAuthenticated = false }: SimplifiedChatProps = {}) {
+export function SimplifiedChat({ initialUserId, isAuthenticated = false, selectedOrganizationId }: SimplifiedChatProps = {}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -123,40 +124,37 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
     console.log('✅ SimplifiedChat: Using provided userId:', initialUserId);
     setUserId(initialUserId);
     setIsInitializing(false);
-    
-    // Check if user has an organization
-    checkUserOrganization(initialUserId);
   }, [initialUserId]);
 
-  const checkUserOrganization = async (userId: string) => {
+  useEffect(() => {
+    console.log('🏢 SimplifiedChat: Organization changed to:', selectedOrganizationId);
     setIsCheckingOrganization(true);
-    try {
-      const { supabase } = await import('@/lib/supabase');
-      const { data, error } = await supabase
-        .from('organization_users')
-        .select('organization_id')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
 
-      if (error) {
-        console.error('Error checking organization:', error);
-        setHasOrganization(false);
-        setOrganizationId(null);
-      } else {
-        setHasOrganization(!!data?.organization_id);
-        setOrganizationId(data?.organization_id || null);
-        console.log('User organization status:', !!data?.organization_id);
+    if (selectedOrganizationId) {
+      setOrganizationId(selectedOrganizationId);
+      setHasOrganization(true);
+
+      setConversationId(null);
+      setMessages([]);
+      setTypingMessageIndex(null);
+      setError(null);
+
+      if (userId) {
+        loadConversations();
       }
-    } catch (err) {
-      console.error('Error checking organization:', err);
-      setHasOrganization(false);
+
+      console.log('✅ Chat state reset for new organization:', selectedOrganizationId);
+    } else {
       setOrganizationId(null);
-    } finally {
-      setIsCheckingOrganization(false);
+      setHasOrganization(false);
+      setConversationId(null);
+      setMessages([]);
+      setConversations([]);
+      console.log('⚠️ No organization selected');
     }
-  };
+
+    setIsCheckingOrganization(false);
+  }, [selectedOrganizationId, userId]);
 
   const ensureConversation = async (): Promise<string> => {
     if (conversationId) {

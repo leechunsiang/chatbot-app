@@ -322,7 +322,7 @@ export function App() {
           Lets chat!
         </span>
       ),
-      content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} />,
+      content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} selectedOrganizationId={selectedOrgId} />,
       disabled: !isAuthenticated || !hasOrganization,
     },
   ];
