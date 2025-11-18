@@ -168,7 +168,7 @@ Respond ONLY with valid JSON, no markdown or extra text.`;
 
 /**
  * Search for relevant document chunks based on a query
- * Filters by user's current organization
+ * CRITICAL: Always requires organizationId for proper data isolation
  */
 export async function searchDocumentChunks(
   query: string,
@@ -177,9 +177,14 @@ export async function searchDocumentChunks(
   organizationId?: string
 ): Promise<DocumentChunk[]> {
   try {
+    if (!organizationId) {
+      console.error('❌ RAG Search - Organization ID is required for security');
+      throw new Error('Organization ID is required for document search');
+    }
+
     console.log('🔍 RAG Search - Original Query:', query);
     console.log('🔍 RAG Search - Threshold:', matchThreshold, 'Count:', matchCount);
-    console.log('🔍 RAG Search - Organization:', organizationId || 'all');
+    console.log('🔍 RAG Search - Organization:', organizationId);
 
     // Preprocess query to get enhanced search terms
     const { enhancedQueries, policyTopic } = await preprocessQuery(query);
@@ -197,7 +202,7 @@ export async function searchDocumentChunks(
         query_embedding: queryEmbedding,
         match_threshold: matchThreshold,
         match_count: matchCount,
-        filter_organization_id: organizationId || null,
+        user_organization_id: organizationId,
       });
 
       if (error) {

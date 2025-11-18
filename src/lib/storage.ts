@@ -9,21 +9,39 @@ export interface UploadResult {
 }
 
 /**
- * Upload a file to Supabase Storage
+ * Upload a file to Supabase Storage with organization-specific path
  */
 export async function uploadDocument(
   file: File,
-  _options?: {
+  options?: {
     onProgress?: (progress: number) => void;
+    organizationId?: string;
   }
 ): Promise<UploadResult> {
   try {
-    // Generate unique file path
+    let organizationId = options?.organizationId;
+
+    if (!organizationId) {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: orgData } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!orgData?.organization_id) {
+        throw new Error('User must belong to an organization to upload documents');
+      }
+
+      organizationId = orgData.organization_id;
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `documents/${fileName}`;
+    const filePath = `documents/${organizationId}/${fileName}`;
 
-    // Upload file
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, file, {
@@ -33,7 +51,6 @@ export async function uploadDocument(
 
     if (error) throw error;
 
-    // Get public URL
     const { data: urlData } = supabase.storage
       .from(BUCKET_NAME)
       .getPublicUrl(filePath);

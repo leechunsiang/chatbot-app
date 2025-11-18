@@ -35,7 +35,7 @@ export interface CreateDocumentInput {
 }
 
 /**
- * Get all policy documents
+ * Get all policy documents for the user's current organization
  */
 export async function getPolicyDocuments(filters?: {
   status?: string;
@@ -43,9 +43,24 @@ export async function getPolicyDocuments(filters?: {
   search?: string;
 }): Promise<PolicyDocument[]> {
   try {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('User not authenticated');
+
+    const { data: orgData } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!orgData?.organization_id) {
+      console.warn('User does not belong to an organization');
+      return [];
+    }
+
     let query = supabase
       .from('policy_documents')
       .select('*')
+      .eq('organization_id', orgData.organization_id)
       .order('created_at', { ascending: false });
 
     if (filters?.status) {
@@ -237,13 +252,27 @@ export async function deletePolicyDocument(id: string): Promise<void> {
 }
 
 /**
- * Get document statistics
+ * Get document statistics for the user's current organization
  */
 export async function getDocumentStats() {
   try {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) throw new Error('User not authenticated');
+
+    const { data: orgData } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!orgData?.organization_id) {
+      return { total: 0, published: 0, draft: 0, archived: 0 };
+    }
+
     const { data, error } = await supabase
       .from('policy_documents')
-      .select('status');
+      .select('status')
+      .eq('organization_id', orgData.organization_id);
 
     if (error) throw error;
 

@@ -20,31 +20,50 @@ export function DocumentsView({ onClose, onUploadClick }: DocumentsViewProps) {
     loadDocuments();
   }, [statusFilter]);
 
-  // Set up real-time subscription for document updates
+  // Set up real-time subscription for document updates in user's organization
   useEffect(() => {
-    const channel = supabase
-      .channel('document-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'policy_documents',
-        },
-        (payload) => {
-          console.log('Document updated:', payload);
-          // Update the specific document in state
-          setDocuments((prevDocs) =>
-            prevDocs.map((doc) =>
-              doc.id === payload.new.id ? { ...doc, ...payload.new } : doc
-            )
-          );
-        }
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupSubscription = async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      const { data: orgData } = await supabase
+        .from('organization_users')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!orgData?.organization_id) return;
+
+      channel = supabase
+        .channel('document-updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'policy_documents',
+            filter: `organization_id=eq.${orgData.organization_id}`,
+          },
+          (payload) => {
+            console.log('Document updated:', payload);
+            setDocuments((prevDocs) =>
+              prevDocs.map((doc) =>
+                doc.id === payload.new.id ? { ...doc, ...payload.new } : doc
+              )
+            );
+          }
+        )
+        .subscribe();
+    };
+
+    setupSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, []);
 
