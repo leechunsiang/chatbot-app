@@ -9,24 +9,29 @@ type MessageInsert = Database['public']['Tables']['messages']['Insert'];
 // ==================== CONVERSATION OPERATIONS ====================
 
 /**
- * Get all conversations for the current user
+ * Get all conversations for the current user, optionally filtered by organization
  */
-export async function getUserConversations(userId: string) {
-  const { data, error } = await supabase
+export async function getUserConversations(userId: string, organizationId?: string | null) {
+  let query = supabase
     .from('conversations')
     .select('*')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
+    .eq('user_id', userId);
+
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+
+  const { data, error } = await query.order('updated_at', { ascending: false });
 
   if (error) throw error;
   return data as Conversation[];
 }
 
 /**
- * Create a new conversation
+ * Create a new conversation with organization context
  */
-export async function createConversation(userId: string, title: string = 'New Chat') {
-  console.log('📝 Creating conversation...', { userId, title });
+export async function createConversation(userId: string, title: string = 'New Chat', organizationId?: string | null) {
+  console.log('📝 Creating conversation...', { userId, title, organizationId });
 
   // Get current auth session to verify authentication
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -96,11 +101,40 @@ export async function createConversation(userId: string, title: string = 'New Ch
     console.log('✅ User exists in database:', userExists);
   }
 
+  // Validate organization if provided
+  if (organizationId) {
+    console.log('🔍 Validating user organization membership...');
+    const { data: orgMembership, error: orgError } = await supabase
+      .from('organization_users')
+      .select('organization_id')
+      .eq('user_id', userId)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (orgError) {
+      console.error('❌ Error checking organization membership:', orgError);
+      throw new Error(`Failed to verify organization membership: ${orgError.message}`);
+    }
+
+    if (!orgMembership) {
+      console.error('❌ User does not belong to organization:', organizationId);
+      throw new Error('You do not have access to this organization. Please contact your administrator.');
+    }
+
+    console.log('✅ User organization membership verified');
+  }
+
   // Now create the conversation
   console.log('📝 Inserting conversation record...');
+  const conversationData: any = { user_id: userId, title };
+
+  if (organizationId) {
+    conversationData.organization_id = organizationId;
+  }
+
   const { data, error } = await supabase
     .from('conversations')
-    .insert({ user_id: userId, title })
+    .insert(conversationData)
     .select()
     .single();
 
@@ -125,26 +159,20 @@ export async function createConversation(userId: string, title: string = 'New Ch
 
   console.log('✅ Conversation created successfully:', data);
 
-  // Log activity if user has organization
-  try {
-    const { data: orgData } = await supabase
-      .from('organization_users')
-      .select('organization_id')
-      .eq('user_id', userId)
-      .single();
-
-    if (orgData?.organization_id) {
+  // Log activity if conversation has organization
+  if (organizationId) {
+    try {
       await logActivity(
-        orgData.organization_id,
+        organizationId,
         userId,
         'conversation_started',
         'New conversation started',
         {}
       );
+    } catch (activityError) {
+      console.error('Error logging activity:', activityError);
+      // Don't fail the conversation creation if activity logging fails
     }
-  } catch (activityError) {
-    console.error('Error logging activity:', activityError);
-    // Don't fail the conversation creation if activity logging fails
   }
 
   return data as Conversation;
@@ -459,6 +487,59 @@ export async function getOrganizationById(organizationId: string) {
   }
 
   return data;
+}
+
+/**
+ * Get user's primary (first) organization
+ */
+export async function getUserPrimaryOrganization(userId: string) {
+  const { data, error } = await supabase
+    .from('organization_users')
+    .select('organization_id, organizations(id, name)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching user primary organization:', error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.organization_id,
+    name: (data.organizations as any)?.name || 'Unknown Organization'
+  };
+}
+
+/**
+ * Get all organizations for a user
+ */
+export async function getUserOrganizations(userId: string) {
+  const { data, error } = await supabase
+    .from('organization_users')
+    .select('organization_id, role, organizations(id, name)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching user organizations:', error);
+    throw error;
+  }
+
+  if (!data || data.length === 0) {
+    return [];
+  }
+
+  return data.map(membership => ({
+    id: membership.organization_id,
+    name: (membership.organizations as any)?.name || 'Unknown Organization',
+    role: membership.role
+  }));
 }
 
 /**

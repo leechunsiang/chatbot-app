@@ -85,6 +85,7 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -135,19 +136,23 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
         .from('organization_users')
         .select('organization_id')
         .eq('user_id', userId)
+        .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
 
       if (error) {
         console.error('Error checking organization:', error);
         setHasOrganization(false);
+        setOrganizationId(null);
       } else {
         setHasOrganization(!!data?.organization_id);
+        setOrganizationId(data?.organization_id || null);
         console.log('User organization status:', !!data?.organization_id);
       }
     } catch (err) {
       console.error('Error checking organization:', err);
       setHasOrganization(false);
+      setOrganizationId(null);
     } finally {
       setIsCheckingOrganization(false);
     }
@@ -162,9 +167,13 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
       throw new Error('User ID not available');
     }
 
+    if (!organizationId) {
+      throw new Error('You must belong to an organization to use the chat. Please contact your administrator.');
+    }
+
     console.log('🔵 Creating conversation on-demand...');
     try {
-      const newConversation = await createConversation(userId, 'New Chat');
+      const newConversation = await createConversation(userId, 'New Chat', organizationId);
       console.log('✅ Conversation created:', newConversation.id);
       setConversationId(newConversation.id);
       await loadConversations(); // Refresh the conversation list
@@ -195,9 +204,9 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
 
   const loadConversations = async () => {
     if (!userId) return;
-    
+
     try {
-      const convs = await getUserConversations(userId);
+      const convs = await getUserConversations(userId, organizationId);
       setConversations(convs);
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -221,10 +230,13 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   };
 
   const handleNewChat = async () => {
-    if (!userId) return;
-    
+    if (!userId || !organizationId) {
+      setError('Cannot create conversation without organization context');
+      return;
+    }
+
     try {
-      const newConv = await createConversation(userId, 'New Chat');
+      const newConv = await createConversation(userId, 'New Chat', organizationId);
       setConversationId(newConv.id);
       setMessages([]);
       setTypingMessageIndex(null);
@@ -232,7 +244,8 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
       setIsSidebarOpen(false);
     } catch (err) {
       console.error('Error creating new chat:', err);
-      setError('Failed to create new chat');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create new chat';
+      setError(errorMessage);
     }
   };
 
@@ -243,15 +256,15 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
   };
 
   const handleDeleteConversation = async (convId: string) => {
-    if (!userId) return;
-    
+    if (!userId || !organizationId) return;
+
     try {
       await deleteConversation(convId);
       await loadConversations();
-      
+
       // If we deleted the current conversation, create a new one
       if (convId === conversationId) {
-        const newConv = await createConversation(userId, 'New Chat');
+        const newConv = await createConversation(userId, 'New Chat', organizationId);
         setConversationId(newConv.id);
         setMessages([]);
       }
@@ -299,11 +312,16 @@ export function SimplifiedChat({ initialUserId, isAuthenticated = false }: Simpl
         }
       }
 
-      // Search for relevant document chunks
+      // Search for relevant document chunks from organization
       let context = '';
       let relevantChunks = [];
       try {
-        relevantChunks = await searchDocumentChunks(userMessageContent, 0.3, 10);
+        relevantChunks = await searchDocumentChunks(
+          userMessageContent,
+          0.3,
+          10,
+          organizationId || undefined
+        );
         if (relevantChunks.length > 0) {
           context = buildContextFromChunks(relevantChunks);
           console.log(`✅ Using ${relevantChunks.length} policy document chunks to answer question`);

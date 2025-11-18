@@ -10,7 +10,7 @@ import type { Database } from '@/lib/database.types';
 
 type Message = Database['public']['Tables']['messages']['Row'];
 
-export function useConversation(userId: string | null) {
+export function useConversation(userId: string | null, organizationId?: string | null) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +43,7 @@ export function useConversation(userId: string | null) {
     }
   }, []);
 
-  const loadConversation = useCallback(async (uid: string) => {
+  const loadConversation = useCallback(async (uid: string, orgId?: string | null) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -53,10 +53,16 @@ export function useConversation(userId: string | null) {
         await ensureUserExists(uid, session.session.user.email || '');
       }
 
-      const { data: conversations, error: conversationError } = await supabase
+      let query = supabase
         .from('conversations')
         .select('*')
-        .eq('user_id', uid)
+        .eq('user_id', uid);
+
+      if (orgId) {
+        query = query.eq('organization_id', orgId);
+      }
+
+      const { data: conversations, error: conversationError } = await query
         .order('updated_at', { ascending: false })
         .limit(1);
 
@@ -69,7 +75,7 @@ export function useConversation(userId: string | null) {
       if (conversations && conversations.length > 0) {
         convId = conversations[0].id;
       } else {
-        const newConversation = await createConversation(uid, 'New Chat');
+        const newConversation = await createConversation(uid, 'New Chat', orgId);
         convId = newConversation.id;
       }
 
@@ -156,9 +162,9 @@ export function useConversation(userId: string | null) {
 
   useEffect(() => {
     if (userId) {
-      loadConversation(userId);
+      loadConversation(userId, organizationId);
     }
-  }, [userId, loadConversation]);
+  }, [userId, organizationId, loadConversation]);
 
   return {
     conversationId,

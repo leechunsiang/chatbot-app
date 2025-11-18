@@ -120,20 +120,30 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
           console.warn('⚠️ Could not load user first name:', userErr);
         }
 
-        // Get user's current organization
+        // Get user's current organization (required for conversations)
+        let userOrgId: string | null = null;
         try {
           const { data: orgData } = await supabase
             .from('organization_users')
             .select('organization_id')
             .eq('user_id', session.user.id)
-            .single();
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
 
           if (orgData?.organization_id) {
+            userOrgId = orgData.organization_id;
             setOrganizationId(orgData.organization_id);
             console.log('✅ User organization:', orgData.organization_id);
+          } else {
+            console.warn('⚠️ User does not belong to any organization');
+            setError('You must belong to an organization to use the chat. Please contact your administrator.');
+            return;
           }
         } catch (orgErr) {
-          console.warn('⚠️ Could not load user organization:', orgErr);
+          console.error('❌ Could not load user organization:', orgErr);
+          setError('Failed to load organization. Please try refreshing the page.');
+          return;
         }
 
         // Try to ensure user exists, but don't fail if table doesn't exist
@@ -145,38 +155,41 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
           // Continue anyway - user can still chat
         }
 
-        // Try to load conversations
-        try {
-          await loadConversations(session.user.id);
+        // Try to load conversations for the organization
+        if (userOrgId) {
+          try {
+            await loadConversations(session.user.id, userOrgId);
 
-          const { data: conversations, error: conversationError } = await supabase
-            .from('conversations')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .order('updated_at', { ascending: false })
-            .limit(1);
+            const { data: conversations, error: conversationError } = await supabase
+              .from('conversations')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .eq('organization_id', userOrgId)
+              .order('updated_at', { ascending: false })
+              .limit(1);
 
-          if (conversationError) {
-            console.error('❌ Could not load conversations:', conversationError);
-            // Create a new conversation instead
-            const newConversation = await createConversation(session.user.id, 'New Chat');
-            setConversationId(newConversation.id);
-            await loadConversations(session.user.id);
-            console.log('✅ Created new conversation:', newConversation.id);
-          } else if (conversations && conversations.length > 0) {
-            setConversationId(conversations[0].id);
-            await loadMessages(conversations[0].id);
-            console.log('✅ Loaded existing conversation:', conversations[0].id);
-          } else {
-            const newConversation = await createConversation(session.user.id, 'New Chat');
-            setConversationId(newConversation.id);
-            await loadConversations(session.user.id);
-            console.log('✅ Created new conversation:', newConversation.id);
+            if (conversationError) {
+              console.error('❌ Could not load conversations:', conversationError);
+              // Create a new conversation instead
+              const newConversation = await createConversation(session.user.id, 'New Chat', userOrgId);
+              setConversationId(newConversation.id);
+              await loadConversations(session.user.id, userOrgId);
+              console.log('✅ Created new conversation:', newConversation.id);
+            } else if (conversations && conversations.length > 0) {
+              setConversationId(conversations[0].id);
+              await loadMessages(conversations[0].id);
+              console.log('✅ Loaded existing conversation:', conversations[0].id);
+            } else {
+              const newConversation = await createConversation(session.user.id, 'New Chat', userOrgId);
+              setConversationId(newConversation.id);
+              await loadConversations(session.user.id, userOrgId);
+              console.log('✅ Created new conversation:', newConversation.id);
+            }
+          } catch (convErr) {
+            console.error('❌ Could not initialize conversations:', convErr);
+            const errorMessage = convErr instanceof Error ? convErr.message : 'Unknown error';
+            setError(`Database error: ${errorMessage}. Please check console for details.`);
           }
-        } catch (convErr) {
-          console.error('❌ Could not initialize conversations:', convErr);
-          const errorMessage = convErr instanceof Error ? convErr.message : 'Unknown error';
-          setError(`Database error: ${errorMessage}. Please check console for details.`);
         }
       } catch (err) {
         console.error('❌ Chat initialization error:', err);
@@ -217,9 +230,9 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
     setOpenMenuId(prev => prev === conversationId ? null : conversationId);
   };
 
-  const loadConversations = async (uid: string) => {
+  const loadConversations = async (uid: string, orgId?: string | null) => {
     try {
-      const convos = await getUserConversations(uid);
+      const convos = await getUserConversations(uid, orgId || organizationId);
       setConversations(convos);
     } catch (err) {
       console.error('Error loading conversations:', err);
@@ -227,16 +240,20 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   };
 
   const handleNewChat = async () => {
-    if (!userId) return;
-    
+    if (!userId || !organizationId) {
+      setError('Cannot create conversation without organization context');
+      return;
+    }
+
     try {
-      const newConversation = await createConversation(userId, 'New Chat');
+      const newConversation = await createConversation(userId, 'New Chat', organizationId);
       setConversationId(newConversation.id);
       setMessages([]);
-      await loadConversations(userId);
+      await loadConversations(userId, organizationId);
     } catch (err) {
       console.error('Error creating new chat:', err);
-      setError('Failed to create new chat');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create new chat';
+      setError(errorMessage);
     }
   };
 
@@ -247,13 +264,13 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
 
   const handleDeleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (!userId) return;
-    
+
+    if (!userId || !organizationId) return;
+
     try {
       await deleteConversation(convId);
-      await loadConversations(userId);
-      
+      await loadConversations(userId, organizationId);
+
       if (convId === conversationId) {
         const remaining = conversations.filter(c => c.id !== convId);
         if (remaining.length > 0) {
@@ -269,17 +286,17 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
   };
 
   const handleRenameConversation = async (convId: string, newTitle: string) => {
-    if (!userId || !newTitle.trim()) return;
-    
+    if (!userId || !newTitle.trim() || !organizationId) return;
+
     try {
       const { error } = await supabase
         .from('conversations')
         .update({ title: newTitle.trim() })
         .eq('id', convId);
-      
+
       if (error) throw error;
-      
-      await loadConversations(userId);
+
+      await loadConversations(userId, organizationId);
       setEditingId(null);
       setEditingTitle('');
     } catch (err) {
@@ -376,9 +393,9 @@ export function Chat({ onNavigateToDashboard }: ChatProps) {
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', conversationId);
-      
-      if (userId) {
-        await loadConversations(userId);
+
+      if (userId && organizationId) {
+        await loadConversations(userId, organizationId);
       }
     } catch (err) {
       console.error('Error updating conversation timestamp:', err);
