@@ -265,21 +265,14 @@ export function DocumentUpload({ onClose, onSuccess }: DocumentUploadProps) {
             <label className="block text-sm font-black text-black mb-2">
               Category
             </label>
-            <select
+            <input
+              type="text"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 border-3 border-black rounded-lg font-bold text-black focus:outline-none focus:ring-4 focus:ring-cyan-400"
+              placeholder="e.g., HR Policies, Benefits, Compliance"
+              className="w-full px-4 py-3 border-3 border-black rounded-lg font-bold text-black placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-cyan-400"
               disabled={isUploading}
-            >
-              <option value="">Select a category</option>
-              <option value="HR Policies">HR Policies</option>
-              <option value="Benefits">Benefits</option>
-              <option value="Procedures">Procedures</option>
-              <option value="Guidelines">Guidelines</option>
-              <option value="Training">Training</option>
-              <option value="Compliance">Compliance</option>
-              <option value="Other">Other</option>
-            </select>
+            />
           </div>
 
           {/* Status */}
