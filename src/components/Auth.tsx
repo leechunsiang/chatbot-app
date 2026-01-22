@@ -560,6 +560,12 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           width="100%"
           height="100%"
         />
+        {/* Banner to cover watermark */}
+        <div className="absolute bottom-0 right-0 bg-white px-8 py-4 z-[9999]">
+          <div className="flex items-center gap-2">
+            <img src="/kadoshai-removebg.png" alt="Logo" className="h-8 w-auto" />
+          </div>
+        </div>
       </div>
     </div>
   );
