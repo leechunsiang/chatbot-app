@@ -515,7 +515,7 @@ export function Dashboard() {
           <div className="flex items-center gap-4">
             <Bot className="h-10 w-10 text-black" strokeWidth={2.5} />
             <h1 className="text-3xl font-black text-black tracking-tight">
-              HR Dashboard
+              Dashboard
             </h1>
             {userOrganization && (
               <>
@@ -606,9 +606,9 @@ export function Dashboard() {
         <div className="mb-8 bg-gradient-to-r from-cyan-400 to-blue-500 border-4 border-black rounded-2xl p-8 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] transform hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
           <h2 className="text-4xl font-black text-white mb-2">Welcome Back! 👋</h2>
           <p className="text-xl text-white font-bold">
-            {userRole === 'employee' 
-              ? `You're part of ${userOrganization}` 
-              : "Here's what's happening with your HR operations"}
+            {userRole === 'employee'
+              ? `You're part of ${userOrganization}`
+              : "Here's what's happening with your operations"}
           </p>
         </div>
 

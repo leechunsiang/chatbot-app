@@ -319,7 +319,6 @@ export function App() {
       label: (
         <span className="flex items-center gap-2">
           <MessageSquare className="w-5 h-5 text-black" />
-          Lets chat!
         </span>
       ),
       content: <SimplifiedChat initialUserId={userId} isAuthenticated={isAuthenticated} selectedOrganizationId={selectedOrgId} />,
