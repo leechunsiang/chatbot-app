@@ -182,42 +182,44 @@ export const Tabs = ({ tabs, defaultActive = 0, className = '', actions, leftAct
               </div>
             )}
             
-            {/* Tab Navigation */}
-            <div className="inline-flex flex-wrap items-center gap-3 z-40 relative">
-              {tabs.map((tab, index) => {
-                const colors = [
-                  'bg-yellow-400 text-black',
-                  'bg-blue-500 text-white',
-                  'bg-green-500 text-white',
-                  'bg-pink-500 text-white',
-                  'bg-purple-500 text-white',
-                  'bg-orange-500 text-white',
-                ];
-                const activeColor = colors[index % colors.length];
-                const isDisabled = tab.disabled || false;
-                
-                return (
-                  <motion.button
-                    key={index}
-                    onClick={() => !isDisabled && handleTabChange(index)}
-                    onMouseEnter={() => !isDisabled && index !== activeTab && setHoveredTab(index)}
-                    disabled={isDisabled}
-                    className={cn(
-                      "relative px-6 py-3 text-sm font-bold transition-all rounded-lg border-3 border-black",
-                      isDisabled
-                        ? 'text-gray-400 bg-gray-200 cursor-not-allowed opacity-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]'
-                        : activeTab === index
-                        ? `${activeColor} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`
-                        : 'text-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
-                    )}
-                    whileHover={!isDisabled ? { scale: 1.05 } : {}}
-                    whileTap={!isDisabled ? { scale: 0.95 } : {}}
-                  >
-                    {tab.label}
-                  </motion.button>
-                );
-              })}
-            </div>
+            {/* Tab Navigation - Only show if there's more than one tab */}
+            {tabs.length > 1 && (
+              <div className="inline-flex flex-wrap items-center gap-3 z-40 relative">
+                {tabs.map((tab, index) => {
+                  const colors = [
+                    'bg-yellow-400 text-black',
+                    'bg-blue-500 text-white',
+                    'bg-green-500 text-white',
+                    'bg-pink-500 text-white',
+                    'bg-purple-500 text-white',
+                    'bg-orange-500 text-white',
+                  ];
+                  const activeColor = colors[index % colors.length];
+                  const isDisabled = tab.disabled || false;
+
+                  return (
+                    <motion.button
+                      key={index}
+                      onClick={() => !isDisabled && handleTabChange(index)}
+                      onMouseEnter={() => !isDisabled && index !== activeTab && setHoveredTab(index)}
+                      disabled={isDisabled}
+                      className={cn(
+                        "relative px-6 py-3 text-sm font-bold transition-all rounded-lg border-3 border-black",
+                        isDisabled
+                          ? 'text-gray-400 bg-gray-200 cursor-not-allowed opacity-50 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.2)]'
+                          : activeTab === index
+                          ? `${activeColor} shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`
+                          : 'text-black bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]'
+                      )}
+                      whileHover={!isDisabled ? { scale: 1.05 } : {}}
+                      whileTap={!isDisabled ? { scale: 0.95 } : {}}
+                    >
+                      {tab.label}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* User Menu */}
             {actions && (
