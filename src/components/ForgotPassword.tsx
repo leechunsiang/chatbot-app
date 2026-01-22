@@ -178,9 +178,12 @@ export function ForgotPassword() {
           )}
 
           {/* Footer */}
-          <div className="mt-4 sm:mt-6 lg:mt-8 flex items-center justify-center gap-2">
-            <span className="text-xs sm:text-sm text-gray-600 font-medium">Powered by</span>
-            <img src="/kadoshAI-removebg.png" alt="kadoshAI" className="h-6 sm:h-8 w-auto" />
+          <div className="mt-4 sm:mt-6 lg:mt-8 flex flex-col items-center justify-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs sm:text-sm text-gray-600 font-medium">Copyright © 2026</span>
+              <img src="/image.png" alt="Logo" className="h-6 sm:h-8 w-auto" />
+            </div>
+            <span className="text-xs sm:text-sm text-gray-600 font-medium">All rights reserved.</span>
           </div>
         </div>
       </div>
