@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { Bot, Building2, X, Search } from 'lucide-react';
-import UnicornEmbed from './UnicornEmbed';
 import { ForgotPassword } from './ForgotPassword';
 import { searchOrganizations, createOrganization, addUserToOrganization } from '@/lib/database';
 
@@ -553,13 +552,66 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         </div>
       </div>
 
-      {/* Right Section - Unicorn Animation Only */}
+      {/* Right Section - Introduction */}
       <div className="hidden lg:flex flex-1 items-center justify-center bg-white border-l-4 xl:border-l-6 border-black relative overflow-hidden">
-        <UnicornEmbed
-          projectId="8OETB8reudHlzT6Tazpd"
-          width="100%"
-          height="100%"
+        {/* Grid Pattern Background */}
+        <div 
+          className="absolute inset-0 opacity-100"
+          style={{
+            backgroundImage: `
+              linear-gradient(to right, black 1px, transparent 1px),
+              linear-gradient(to bottom, black 1px, transparent 1px)
+            `,
+            backgroundSize: '20px 20px'
+          }}
         />
+        
+        {/* Content */}
+        <div className="relative z-10 max-w-xl px-12 py-16 text-center">
+          {/* Main Icon/Logo */}
+          <div className="mb-8 flex justify-center">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-[#FFDF20] border-4 border-black rounded-2xl shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transform hover:translate-x-[-2px] hover:translate-y-[-2px] hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all">
+              <Bot className="w-14 h-14 text-black" />
+            </div>
+          </div>
+
+          {/* Headline */}
+          <h2 className="text-4xl xl:text-5xl font-black text-black mb-4 tracking-tight">
+            Your AI Assistant
+          </h2>
+          <p className="text-xl font-bold text-gray-800 mb-12">
+            Chat smarter, work faster, achieve more
+          </p>
+
+          {/* Feature Cards */}
+          <div className="space-y-4 mb-12">
+            {[
+              { icon: '💬', title: 'Smart Conversations', desc: 'Natural AI-powered chat experience' },
+              { icon: '📄', title: 'Document Analysis', desc: 'Upload and analyze documents instantly' },
+              { icon: '⚡', title: 'Lightning Fast', desc: 'Get answers in seconds, not hours' }
+            ].map((feature, index) => (
+              <div 
+                key={index}
+                className="bg-white border-3 border-black rounded-lg p-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[-1px] hover:translate-y-[-1px] transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="text-3xl">{feature.icon}</div>
+                  <div className="text-left">
+                    <h3 className="font-bold text-black text-lg">{feature.title}</h3>
+                    <p className="text-sm text-gray-700 font-medium">{feature.desc}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Bottom CTA */}
+          <div className="bg-[#FFDF20] border-3 border-black rounded-lg p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <p className="text-lg font-black text-black">
+              Ready to supercharge your productivity? 🚀
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
