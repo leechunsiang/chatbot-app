@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from 'react';
 
 interface UnicornEmbedProps {
   projectId: string;
@@ -19,16 +19,16 @@ declare global {
 
 export default function UnicornEmbed({
   projectId,
-  width = "100%",
-  height = "900px",
-  className = "",
+  width = '100%',
+  height = '900px',
+  className = '',
 }: UnicornEmbedProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef<boolean>(false);
 
   useEffect(() => {
     // Only run on client-side
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
 
     // Function to initialize Unicorn Studio script
     const loadUnicornScript = () => {
@@ -48,10 +48,10 @@ export default function UnicornEmbed({
       }
 
       // Create and inject script
-      const script = document.createElement("script");
+      const script = document.createElement('script');
       script.src =
-        "https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.34/dist/unicornStudio.umd.js";
-      script.type = "text/javascript";
+        'https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v1.4.34/dist/unicornStudio.umd.js';
+      script.type = 'text/javascript';
       script.async = true;
 
       script.onload = () => {
@@ -62,7 +62,7 @@ export default function UnicornEmbed({
       };
 
       script.onerror = () => {
-        console.error("Failed to load Unicorn Studio script");
+        console.error('Failed to load Unicorn Studio script');
         scriptLoadedRef.current = false;
       };
 
@@ -81,30 +81,18 @@ export default function UnicornEmbed({
   }, []);
 
   // Convert width/height to CSS-compatible strings
-  const widthStyle = typeof width === "number" ? `${width}px` : width;
-  const heightStyle = typeof height === "number" ? `${height}px` : height;
+  const widthStyle = typeof width === 'number' ? `${width}px` : width;
+  const heightStyle = typeof height === 'number' ? `${height}px` : height;
 
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
-      style={{ width: widthStyle, height: heightStyle }}
-    >
-      <div
-        ref={containerRef}
-        data-us-project={projectId}
-        style={{
-          width: "100%",
-          height: "100%",
-        }}
-      />
-      {/* Overlay to cover "Made with unicorn.studio" watermark */}
-      <div
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white z-[9999] rounded-full shadow-sm pointer-events-none"
-        style={{
-          width: "200px",
-          height: "40px",
-        }}
-      />
-    </div>
+      ref={containerRef}
+      data-us-project={projectId}
+      className={className}
+      style={{
+        width: widthStyle,
+        height: heightStyle,
+      }}
+    />
   );
 }

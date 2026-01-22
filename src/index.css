@@ -102,29 +102,3 @@ p {
   display: none;
 }
 
-/* Shimmer animation for text */
-@keyframes shimmer {
-  0% {
-    background-position: -200% center;
-  }
-  100% {
-    background-position: 200% center;
-  }
-}
-
-.shimmer-text {
-  background: linear-gradient(
-    90deg,
-    #000000 0%,
-    #000000 40%,
-    #ffffff 50%,
-    #000000 60%,
-    #000000 100%
-  );
-  background-size: 200% auto;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer 3s linear infinite;
-}
-

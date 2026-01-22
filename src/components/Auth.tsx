@@ -557,13 +557,6 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           width="100%"
           height="100%"
         />
-
-        {/* Banner at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 bg-[#FFDF20] border-t-4 border-black py-6 px-8 z-10">
-          <h2 className="text-2xl xl:text-3xl font-bold text-black text-center tracking-tight shimmer-text">
-            POLICY & BENEFITS CHATBOT
-          </h2>
-        </div>
       </div>
     </div>
   );
